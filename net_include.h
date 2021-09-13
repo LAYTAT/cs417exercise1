@@ -16,3 +16,12 @@
 
 #define MAX_MESS_LEN 1400
 
+#define file_to_be_send "ONE_GB_FILE"
+#define BUFSIZE 600
+
+struct packet {
+    int seq_num;
+    int size;
+    int data[BUFSIZE];
+};
+

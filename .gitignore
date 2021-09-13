@@ -1,3 +1,11 @@
+# ignore generated files
+file_copy
+myip
+net_client
+net_server
+ucast
+
+#ignore jetbrain files
 .idea
 
 # Prerequisites
