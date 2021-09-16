@@ -31,9 +31,10 @@ int received_data = 0;
 int length = 6; // Number of packets to be sent at a single time
 struct packet _packet;
 struct packet packets[5];
-int _acks; // cumulative acks up until now
 struct feedback {
     //feedback info
+    int cumu_acks; // cumulative acks up until now
+    int nack[length];
 };
 
 void* receivePackets() {
