@@ -18,16 +18,17 @@
 #define MAX_MESS_LEN 1400
 
 #define BUFSIZE 300
-#define MAX_NACK 10
+#define WINDOW_SIZE 10
 
 struct packet {
     int type;           // 0 for Sender Init Packet
-                        // 1 for Receiver Response to Senser
                         // 2 for Sender Packet
                         // 3 for Feedback Packet
+                        // 4 for rejection to sender
+                        // 5 for saying ready to sender
     int seq_num;        // for Sender Packet
     int size;           // final Sender Packet size will be smaller than BUFSIZE
     int cumu_acks;      // cumulative acks specified by  Feedback Packet
-    int nack[MAX_NACK]; // lost packets specified by Feedback Packet
+    int nack[WINDOW_SIZE]; // lost packets specified by Feedback Packet
     unsigned char data[BUFSIZE]; // where the Sender Packet stores their data and Sender Init Packet store the dest file name
 };
