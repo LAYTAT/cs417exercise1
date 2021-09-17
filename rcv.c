@@ -5,13 +5,6 @@
 
 #define NAME_LENGTH 80
 
-int gethostname(char*,size_t);
-
-void PromptForHostName( char *my_name, char *host_name, size_t max_len );
-
-// socket parameters
-int _bind;
-int _socket;
 //struct sockaaddr_in address;
 //socklen_t addr_length = sizeof(struct sockaaddr_in);
 
@@ -37,17 +30,12 @@ void receivePackets() {
 }
 
 int main(){
-    struct sockaddr_in    name;
-    struct sockaddr_in    send_addr;
+    struct sockaddr_in    serv_addr;
+    struct sockaddr_in    client_addr;
     struct sockaddr_in    from_addr;
     socklen_t             from_len;
-    struct hostent        h_ent;
-    struct hostent        *p_h_ent;
-    char                  host_name[NAME_LENGTH] = {'\0'};
     char                  my_name[NAME_LENGTH] = {'\0'};
-    int                   host_num;
-    int                   from_ip;
-    int                   ss,sr;
+    int                   socket_fd;
     fd_set                mask;
     fd_set                read_mask, write_mask, excep_mask;
     int                   bytes;
@@ -55,27 +43,34 @@ int main(){
     char                  mess_buf[MAX_MESS_LEN];
     char                  input_buf[80];
     struct timeval        timeout;
-    bool                  receiving_flag;
+    int                  receiving_flag;
 
-    sr = socket(AF_INET, SOCK_DGRAM, 0);  /* socket for receiving (udp) */
-    if (sr<0) {
+    socket_fd = socket(AF_INET, SOCK_DGRAM, 0);  /* server socket for communicating with clients */
+    if (socket_fd<0) {
         perror("rcv: socket err");
         exit(1);
     }
 
-    name.sin_family = AF_INET;
-    name.sin_addr.s_addr = INADDR_ANY;
-    name.sin_port = htons(PORT);
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    memset(&client_addr, 0, sizeof(client_addr));
+    memset(&from_addr, 0, sizeof(from_addr));
 
-    if ( bind( sr, (struct sockaddr *)&name, sizeof(name) ) < 0 ) {
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons(PORT);
+
+    
+
+    if ( bind( socket_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr) ) < 0 ) { /*server created!*/
         perror("rcv: bind err");
         exit(1);
     }
 
+
     FD_ZERO( &mask );
     FD_ZERO( &write_mask );
     FD_ZERO( &excep_mask );
-    FD_SET( sr, &mask );
+    FD_SET( socket_fd, &mask );
     for(;;)
     {
         read_mask = mask;
@@ -83,11 +78,15 @@ int main(){
         timeout.tv_usec = 0;
         num = select( FD_SETSIZE, &read_mask, &write_mask, &excep_mask, &timeout);
         if (num > 0) {
-            if ( FD_ISSET( sr, &read_mask) ) {
+            if ( FD_ISSET( socket_fd, &read_mask) ) {
                 from_len = sizeof(from_addr);
-                bytes = recvfrom( sr, mess_buf, sizeof(mess_buf), 0,
+                bytes = recvfrom( socket_fd, mess_buf, sizeof(mess_buf), 0,
                                   (struct sockaddr *)&from_addr,
                                   &from_len );
+
+
+                //packet unserilazation 
+                //if initial packet recieved and server not busy 
                 mess_buf[bytes] = 0;
 
                 // check if not in middle of receiving
@@ -97,8 +96,8 @@ int main(){
                     bytes = read(0, not_ready, sizeof(not_ready));
                     input_buf[bytes] = 0;
 
-                    sendto(sr, input_buf, strlen(input_buf), 0,
-                           (struct sockaddr *) &from_addr, sizeof(from_addr));
+                    sendto(socket_fd, input_buf, strlen(input_buf), 0,
+                           (struct sockaddr *) &client_addr, sizeof(client_addr));
                 }
             }
         } else {
