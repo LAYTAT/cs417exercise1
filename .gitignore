@@ -4,6 +4,8 @@ myip
 net_client
 net_server
 ucast
+ncp
+rcv
 
 #ignore jetbrain files
 .idea
