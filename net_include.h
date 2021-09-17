@@ -25,11 +25,13 @@ struct File_Data {
 };
 
 struct packet {
-    int type;           // 0 for Sender Init Packet
+    int type;           // 0 for uninitialize packet
+                        // 1 for Sender Init Packet
                         // 2 for Sender Packet
                         // 3 for Feedback Packet
                         // 4 for rejection to sender
                         // 5 for saying ready to sender
+                        // 6 for last Sender Packect
     int seq_num;        // for Sender Packet
     int size;           // final Sender Packet size will be smaller than BUFSIZE
     int cumu_acks;      // cumulative acks specified by  Feedback Packet

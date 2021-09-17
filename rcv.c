@@ -3,7 +3,7 @@
 //
 #include "net_include.h"
 
-int cal_cumu_ack_from_window_start(int * begin, int size) {
+int calAckFromWindowStart(const int * begin, int size) {
     int count = 0;
     for (int i = 0; i < size ; ++i) {
         if (begin[i] == 1) {
@@ -28,11 +28,12 @@ int main(){
     int                     num;
     char                    mess_buf[MAX_MESS_LEN];
     struct packet           packet_buf;
+    packet_buf.type         = 0; //indicates this packet is not filled with any info
     struct timeval          timeout;
     int                     window_start = 0;
     int                     window_slots[WINDOW_SIZE];
     struct packet           reply_to_init_pckt;
-    struct File_Data        filedata_buf[WINDOW_SIZE];
+    struct File_Data        filedataBuf[WINDOW_SIZE];
     int                     received_counter = 0; // count util there should be a feedback
     struct packet           feedback;
     feedback.type           = 3;
@@ -73,17 +74,22 @@ int main(){
                                   (struct sockaddr *)&from_addr,
                                   &from_len ); // receiving data and store it in the message buffer
 
-                if(bytes_recved != -1) { // if received message, write it into a packet struct
+                if (bytes_recved != -1) { // if received message, write it into a packet struct
                     memcpy(&packet_buf, &mess_buf, sizeof(packet_buf));
                 }
+
+                if (packet_buf.type == 0) {
+                    printf("packet is not successfully received.");
+                }
+
                 switch (packet_buf.type) {
 
                     //received packet is a init packet
-                    case 0:
+                    case 1:
                         if ( status == 0 ) {
                             client_addr = from_addr;
                             status = 1; //mark as occupied
-                            reply_to_init_pckt.type = 5; // indicates acception to sender
+                            reply_to_init_pckt.type = 5; // indicates acceptation to sender
                         } else {
                             reply_to_init_pckt.type = 4; // indicates rejection to sender
                         }
@@ -97,16 +103,16 @@ int main(){
                         {
                             int idx_in_window = packet_buf.seq_num - window_start;
                             window_slots[idx_in_window] = 1;
-                            memcpy(&filedata_buf[packet_buf.seq_num - window_start], &packet_buf.data, sizeof(struct File_Data));
-                            received_counter += received_counter;
+                            memcpy(&filedataBuf[packet_buf.seq_num - window_start], &packet_buf.data, sizeof(struct File_Data));
+                            received_counter ++;
 
                             // time to send feedback
                             if (received_counter == window_start - 1) {
                                 received_counter = 0;
                                 memset(&feedback, 0, sizeof (feedback));
 
-                                int cal_cumu_ack_from_window = cal_cumu_ack_from_window_start(window_slots, WINDOW_SIZE);
-                                feedback.cumu_acks = window_start + cal_cumu_ack_from_window_start;
+                                int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
+                                feedback.cumu_acks = window_start + ackFromWindowStart;
 
                                 // generate nack[WINDOW_SIZE]
                                 for(int i = 0; i < WINDOW_SIZE; ++i) {
@@ -116,12 +122,15 @@ int main(){
                                 }
 
                                 //TODO: write cumulated packets into a file
-                                window_start = window_start + cal_cumu_ack_from_window_start;
+                                window_start = window_start + ackFromWindowStart;
 
                                 // send feedback to the sender
                                 sendto(socket_fd, &feedback, sizeof(feedback), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
                             }
                         }
+                        break;
+                    default:
+                        printf("unknown type of packet received.");
                 }
 
             }
