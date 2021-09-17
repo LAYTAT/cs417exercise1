@@ -95,7 +95,7 @@ int main(){
                         }
                         sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &from_addr, sizeof(from_addr));
                         break;
-
+                        // TODO: add timeout for read packet
                         // if it is a sender packet, which contains the file data
                     case 2:
                         // packet at a valid position in the current window
@@ -129,6 +129,10 @@ int main(){
                             }
                         }
                         break;
+
+                    // received last sender packetk
+                    case 6:
+                            //TODO: write final into file and close file
                     default:
                         printf("unknown type of packet received.");
                 }
