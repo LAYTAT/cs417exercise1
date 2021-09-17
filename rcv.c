@@ -55,10 +55,11 @@ int main(){
     char                  mess_buf[MAX_MESS_LEN];
     char                  input_buf[80];
     struct timeval        timeout;
+    bool                  receiving_flag;
 
     sr = socket(AF_INET, SOCK_DGRAM, 0);  /* socket for receiving (udp) */
     if (sr<0) {
-        perror("Ucast: socket");
+        perror("rcv: socket err");
         exit(1);
     }
 
@@ -67,36 +68,14 @@ int main(){
     name.sin_port = htons(PORT);
 
     if ( bind( sr, (struct sockaddr *)&name, sizeof(name) ) < 0 ) {
-        perror("Ucast: bind");
+        perror("rcv: bind err");
         exit(1);
     }
-
-    ss = socket(AF_INET, SOCK_DGRAM, 0); /* socket for sending (udp) */
-    if (ss<0) {
-        perror("Ucast: socket");
-        exit(1);
-    }
-
-    PromptForHostName(my_name,host_name,NAME_LENGTH);
-
-    p_h_ent = gethostbyname(host_name);
-    if ( p_h_ent == NULL ) {
-        printf("Ucast: gethostbyname error.\n");
-        exit(1);
-    }
-
-    memcpy( &h_ent, p_h_ent, sizeof(h_ent));
-    memcpy( &host_num, h_ent.h_addr_list[0], sizeof(host_num) );
-
-    send_addr.sin_family = AF_INET;
-    send_addr.sin_addr.s_addr = host_num;
-    send_addr.sin_port = htons(PORT);
 
     FD_ZERO( &mask );
     FD_ZERO( &write_mask );
     FD_ZERO( &excep_mask );
     FD_SET( sr, &mask );
-    FD_SET( (long)0, &mask ); /* stdin */
     for(;;)
     {
         read_mask = mask;
@@ -110,21 +89,17 @@ int main(){
                                   (struct sockaddr *)&from_addr,
                                   &from_len );
                 mess_buf[bytes] = 0;
-                from_ip = from_addr.sin_addr.s_addr;
 
-                printf( "Received from (%d.%d.%d.%d): %s\n",
-                        (htonl(from_ip) & 0xff000000)>>24,
-                        (htonl(from_ip) & 0x00ff0000)>>16,
-                        (htonl(from_ip) & 0x0000ff00)>>8,
-                        (htonl(from_ip) & 0x000000ff),
-                        mess_buf );
+                // check if not in middle of receiving
+                if (receiving_flag) {
+                    struct packet not_ready;
+                    //packet
+                    bytes = read(0, not_ready, sizeof(not_ready));
+                    input_buf[bytes] = 0;
 
-            }else if( FD_ISSET(0, &read_mask) ) {
-                bytes = read( 0, input_buf, sizeof(input_buf) );
-                input_buf[bytes] = 0;
-                printf( "There is an input: %s\n", input_buf );
-                sendto( ss, input_buf, strlen(input_buf), 0,
-                        (struct sockaddr *)&send_addr, sizeof(send_addr) );
+                    sendto(sr, input_buf, strlen(input_buf), 0,
+                           (struct sockaddr *) &from_addr, sizeof(from_addr));
+                }
             }
         } else {
             printf(".");
@@ -133,25 +108,4 @@ int main(){
     }
 
     return 0;
-}
-
-void PromptForHostName( char *my_name, char *host_name, size_t max_len ) {
-
-    char *c;
-
-    gethostname(my_name, max_len );
-    printf("My host name is %s.\n", my_name);
-
-    printf( "\nEnter host to send to:\n" );
-    if ( fgets(host_name,max_len,stdin) == NULL ) {
-        perror("Ucast: read_name");
-        exit(1);
-    }
-
-    c = strchr(host_name,'\n');
-    if ( c ) *c = '\0';
-    c = strchr(host_name,'\r');
-    if ( c ) *c = '\0';
-
-    printf( "Sending from %s to %s.\n", my_name, host_name );
 }

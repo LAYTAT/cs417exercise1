@@ -111,7 +111,7 @@ void PromptForHostName( char *my_name, char *host_name, size_t max_len ) {
 
     char *c;
 
-    gethostname(my_name, max_len );
+    gethostname(my_name, max_len);
     printf("My host name is %s.\n", my_name);
 
     printf( "\nEnter host to send to:\n" );

@@ -29,5 +29,5 @@ struct packet {
     int size;           // final Sender Packet size will be smaller than BUFSIZE
     int cumu_acks;      // cumulative acks specified by  Feedback Packet
     int nack[MAX_NACK]; // lost packets specified by Feedback Packet
-    char data[BUFSIZE]; // where the Sender Packet stores their data and Sender Init Packet store the dest file name
+    unsigned char data[BUFSIZE]; // where the Sender Packet stores their data and Sender Init Packet store the dest file name
 };
