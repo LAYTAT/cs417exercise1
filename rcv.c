@@ -3,20 +3,12 @@
 //
 #include "net_include.h"
 
-#define file_to_be_send "ONE_GB_FILE"
-#define BUFSIZE 600
-
-struct packet {
-    int seq_num;
-    int size;
-    int data[BUFSIZE];
-};
 
 // socket parameters
 int PORT;
 int _bind;
 int _socket;
-struct sockaaddr_in address;
+//struct sockaaddr_in address;
 socklen_t addr_length = sizeof(struct sockaaddr_in);
 
 // transferred file parameters
@@ -43,4 +35,9 @@ void* receivePackets() {
 
         //recv(s, )
     }
+}
+
+int main(){
+    printf("hello there!")
+    return 0;
 }

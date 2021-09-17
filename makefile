@@ -20,6 +20,12 @@ myip: myip.o
 file_copy: file_copy.o
 	    $(CC) -o file_copy file_copy.o
 
+ncp: ncp.o
+		$(CC -o ncp ncp.o
+
+rcv: rcv.o
+		$(CC -o rcv rcv.o
+
 clean:
 	rm *.o
 	rm net_server 
@@ -27,6 +33,8 @@ clean:
 	rm ucast
 	rm myip
 	rm file_copy
+	rm ncv
+	rm rcv
 
 %.o:    %.c
 	$(CC) $(CFLAGS) $*.c
