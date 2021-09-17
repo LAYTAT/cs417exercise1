@@ -5,6 +5,7 @@
 #define BUF_SIZE 300
 //ncp send files in packets
 //ncp is the client
+int gethostname(char*,size_t);
 
 int main(int argc, char* argv[]) {
 
@@ -19,7 +20,7 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in serv_addr; /*server address info*/
   struct hostent        h_ent;
   struct hostent        *p_h_ent;
-  int host_num; 
+  int host_num;
 
 
 
@@ -69,7 +70,7 @@ int main(int argc, char* argv[]) {
   serv_addr.sin_addr.s_addr = host_num; 
   serv_addr.sin_port = htons(PORT);
 
-  
+
 
 
 
