@@ -17,6 +17,7 @@
 #define MAX_MESS_LEN 1400
 
 #define BUFSIZE 300
+#define MAX_NACK 10
 
 struct packet {
     int seq_num;
@@ -24,3 +25,8 @@ struct packet {
     int data[BUFSIZE];
 };
 
+struct feedback {
+    //feedback info
+    int cumu_acks; // cumulative acks up until now
+    int nack[MAX_NACK];
+};

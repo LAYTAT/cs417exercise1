@@ -5,11 +5,10 @@
 
 
 // socket parameters
-int PORT;
 int _bind;
 int _socket;
 //struct sockaaddr_in address;
-socklen_t addr_length = sizeof(struct sockaaddr_in);
+//socklen_t addr_length = sizeof(struct sockaaddr_in);
 
 // transferred file parameters
 int recv_len = 0;
@@ -23,11 +22,6 @@ int received_data = 0;
 int length = 6; // Number of packets to be sent at a single time
 struct packet _packet;
 struct packet packets[5];
-struct feedback {
-    //feedback info
-    int cumu_acks; // cumulative acks up until now
-    int nack[length];
-};
 
 void* receivePackets() {
     // try to receive length UDP packets at a time
@@ -38,6 +32,6 @@ void* receivePackets() {
 }
 
 int main(){
-    printf("hello there!")
+    printf("hello there!");
     return 0;
 }

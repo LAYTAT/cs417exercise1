@@ -21,10 +21,10 @@ file_copy: file_copy.o
 	    $(CC) -o file_copy file_copy.o
 
 ncp: ncp.o
-		$(CC -o ncp ncp.o
+		$(CC) -o ncp ncp.o
 
 rcv: rcv.o
-		$(CC -o rcv rcv.o
+		$(CC) -o rcv rcv.o
 
 clean:
 	rm *.o
