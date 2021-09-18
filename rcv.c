@@ -3,15 +3,23 @@
 //
 #include "net_include.h"
 
-struct File_Data {
-    unsigned char data[BUFSIZE];
-};
+int calAckFromWindowStart(const int * begin, int size) {
+    int count = 0;
+    for (int i = 0; i < size ; ++i) {
+        if (begin[i] == 1) {
+            count++;
+        } else {
+            return count;
+        }
+    }
+    return count;
+}
 
 int main(){
-    struct sockaddr_in      serv_addr;            // storing own addr, use for binding
-    struct sockaddr_in      client_addr;          // storing current client addr
-    int                     status = 0;       // indicate current status: 0 for available, 1 for occupied
-    struct sockaddr_in      from_addr;            // storing any incoming addr
+    struct sockaddr_in      serv_addr;                              // storing own addr, use for binding
+    struct sockaddr_in      client_addr;                            // storing current client addr
+    int                     status = 0;                             // indicate current status: 0 for available, 1 for occupied
+    struct sockaddr_in      from_addr;                              // storing any incoming addr
     socklen_t               from_len;
     int                     socket_fd;
     fd_set                  mask;
@@ -20,13 +28,21 @@ int main(){
     int                     num;
     char                    mess_buf[MAX_MESS_LEN];
     struct packet           packet_buf;
+    packet_buf.type         = 0;                                    //indicates this packet is not filled with any info
     struct timeval          timeout;
-    int                     window_start;
+    int                     window_start = 0;
+    int                     window_slots[WINDOW_SIZE];
     struct packet           reply_to_init_pckt;
-    struct File_Data        filedata_buf[WINDOW_SIZE];
-    int                     infile_idx = 0;
+    struct File_Data        window[WINDOW_SIZE];
+    int                     received_counter = 0;                   // count util there should be a feedback
+    struct packet           feedback;
+                            feedback.type = 3;
+    FILE *                  fPtr = NULL;                            //file pointer to write stuff into
+    int                     ready_packet_flag = 0;
+    int                     NORMAL_TIMEOUT = 1;
 
-    socket_fd = socket(AF_INET, SOCK_DGRAM, 0);  /* server socket for communicating with clients */
+    /* server socket for communicating with clients */
+    socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (socket_fd<0) {
         perror("rcv: socket err");
         exit(1);
@@ -40,11 +56,11 @@ int main(){
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(PORT);
 
-    if ( bind( socket_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr) ) < 0 ) { /*server created!*/
+    /*server created!*/
+    if ( bind( socket_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr) ) < 0 ) {
         perror("rcv: bind err");
         exit(1);
     }
-
 
     FD_ZERO( &mask );
     FD_ZERO( &write_mask );
@@ -53,7 +69,7 @@ int main(){
     for(;;)
     {
         read_mask = mask;
-        timeout.tv_sec = 10;
+        timeout.tv_sec = NORMAL_TIMEOUT;
         timeout.tv_usec = 0;
         num = select( FD_SETSIZE, &read_mask, &write_mask, &excep_mask, &timeout);
         if (num > 0) {
@@ -63,33 +79,106 @@ int main(){
                                   (struct sockaddr *)&from_addr,
                                   &from_len ); // receiving data and store it in the message buffer
 
-                if(bytes_recved != -1) { // if received message, write it into a packet struct
+                if (bytes_recved != -1) { // if received message, write it into a packet struct
                     memcpy(&packet_buf, &mess_buf, sizeof(packet_buf));
                 }
 
-                if ( packet_buf.type == 0 ) { //received packet is a init packet
-                    if ( status == 0 ) {
-                        client_addr = from_addr;
-                        status = 1; //mark as occupied
-                        reply_to_init_pckt.type = 5; // indicates acception to sender
-                    } else {
-                        reply_to_init_pckt.type = 4; // indicates rejection to sender
-                    }
-                    sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &from_addr, sizeof(from_addr));
+                if (packet_buf.type == 0) {
+                    printf("packet is not successfully received.");
                 }
 
-                if ( packet_buf.type == 2 ) { // if it is a sender packet, which contains the file data
-                    memcpy(filedata_buf);
+                switch (packet_buf.type) {
+                    /* received packet is a init packet */
+                    case 1:
+                        if ( status == 0 ) {
+                            client_addr = from_addr;
+                            status = 1; //mark server as occupied
+                            reply_to_init_pckt.type = 5; // indicates acceptation to sender
+
+                            /* open file with dest file name */
+                            int filename_size = packet_buf.size;
+                            char destFilename[filename_size + 1];
+                            memcpy(&destFilename, &packet_buf.data, sizeof (char) * filename_size);
+                            fPtr = fopen(destFilename, "wb"); // open the file with binary mode
+                            if (fPtr == NULL) {
+                                printf("file opening failed");
+                            }
+
+                            /* set timer for ready pakcet */
+                            timeout.tv_sec = 2;
+                            ready_packet_flag = 1;
+                        } else {
+                            /* indicates rejection to sender */
+                            reply_to_init_pckt.type = 4;
+                        }
+                        sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &from_addr, sizeof(from_addr));
+                        break;
+
+                    /* if it is a sender packet, which contains the file data */
+                    case 2:
+                        /*remove flag for ready pakcet*/
+                        timeout.tv_sec = NORMAL_TIMEOUT;
+                        ready_packet_flag = 0;
+
+                        /* packet at a valid position in the current window */
+                        int idx_in_window = packet_buf.seq_num - window_start;
+                        if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
+                        {
+                            memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
+                            window_slots[idx_in_window] = 1;
+
+                            received_counter ++;
+
+                            /* time to send feedback */
+                            if (received_counter == window_start - 1) {
+                                received_counter = 0;
+                                memset(&feedback, 0, sizeof (feedback));
+
+                                int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
+                                feedback.cumu_acks = window_start + ackFromWindowStart;
+
+                                // generate nack[WINDOW_SIZE]
+                                for(int i = 0; i < WINDOW_SIZE; ++i) {
+                                    if(window_slots[i] != 1) {
+                                        feedback.nack[i] = window_start + i;
+                                    }
+                                }
+
+                                /* write cumulated packets into a file */
+                                window_start = window_start + ackFromWindowStart;
+
+                                /* write cumulated datas data into file */
+                                fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
+                                
+                                /* send feedback to the sender */
+                                sendto(socket_fd, &feedback, sizeof(feedback), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+                            }
+                        } else {
+                            printf("packet already received or ahead of window");
+                        }
+                        break;
+
+                    /* received last sender packetk */
+                    case 6:
+                        /*write final into file and close file*/
+                        fwrite(&packet_buf.data , sizeof(struct File_Data), 1 , fPtr);
+
+                        /* Close file to save file data */
+                        fclose(fPtr);
+                    default:
+                        printf("unknown type of packet received.");
                 }
 
-                // packet unserilazation
-                // if initial packet recieved and server not busy
-                mess_buf[bytes_recved] = 0;
-
-                // check if not in middle of receiving
             }
         } else {
-            printf("not receiving anything from anyone");
+            /*if timeout for readypacket */
+            if (ready_packet_flag) {
+                /*  resend the ready packet */
+                sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &from_addr, sizeof(from_addr));
+                printf("timeout for ready packet...");
+            }
+
+            printf("not receiving anything from anyone...");
             fflush(0);
         }
     }

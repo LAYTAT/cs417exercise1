@@ -20,15 +20,21 @@
 #define BUFSIZE 300
 #define WINDOW_SIZE 10
 
+struct File_Data {
+    unsigned char data[BUFSIZE];
+};
+
 struct packet {
-    int type;           // 0 for Sender Init Packet
+    int type;           // 0 for uninitialize packet
+                        // 1 for Sender Init Packet
                         // 2 for Sender Packet
                         // 3 for Feedback Packet
                         // 4 for rejection to sender
                         // 5 for saying ready to sender
+                        // 6 for last Sender Packect
     int seq_num;        // for Sender Packet
     int size;           // final Sender Packet size will be smaller than BUFSIZE
     int cumu_acks;      // cumulative acks specified by  Feedback Packet
     int nack[WINDOW_SIZE]; // lost packets specified by Feedback Packet
-    unsigned char data[BUFSIZE]; // where the Sender Packet stores their data and Sender Init Packet store the dest file name
+    struct File_Data data; // where the Sender Packet stores their data and Sender Init Packet store the dest file name
 };
