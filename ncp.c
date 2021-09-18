@@ -1,11 +1,12 @@
 #include "net_include.h"
 
-
-#define WIND_SIZE 50
+#define WIND_SIZE 10
 #define BUF_SIZE 300
 //ncp send files in packets
 //ncp is the client
 int gethostname(char*,size_t);
+char * seq_to_addr(int sequence_number, int window_number, char ** window);
+
 
 int main(int argc, char* argv[]) {
 
@@ -14,6 +15,7 @@ int main(int argc, char* argv[]) {
   char * dest_fn; //destination file name
   char * comp_name; //computer name, i.e.ugrad1 of the HOST (i.e. host_name)
   FILE * fr; /* Pointer to source file, which we read */
+  FILE * fn; /* Pointer for resending neg awk*/
   char * buf[BUF_SIZE];
   int nread;
   int ss;  /*socket for sending*/
@@ -21,6 +23,7 @@ int main(int argc, char* argv[]) {
   struct hostent        h_ent;
   struct hostent        *p_h_ent;
   int host_num;
+
 
 
 
@@ -69,6 +72,17 @@ int main(int argc, char* argv[]) {
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = host_num; 
   serv_addr.sin_port = htons(PORT);
+  
+  //connected to the host!
+
+  //conversion function from a sequence number to the file location
+
+  
+
+
+
+
+
 
 
   
@@ -90,8 +104,16 @@ int main(int argc, char* argv[]) {
 
 
   return 0;
-
-
-  
-  
 }
+
+//window stores window_sized addresses of corresponding window_sized seqeunce numbers 
+//sequence number is the overall location of the data within the file
+//wind_num denotes how far the window has slided
+char * seq_to_addr(int seq_num, int wind_num, char**window) {
+  if (seq_num - wind_num >= 50) {
+    fprintf(1, "invalid sequence number.\n");
+  }
+  int length = strlen(window);
+  return window[seq_num % length];
+}
+
