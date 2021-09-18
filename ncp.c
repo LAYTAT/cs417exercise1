@@ -23,6 +23,9 @@ int main(int argc, char* argv[]) {
   struct hostent        h_ent;
   struct hostent        *p_h_ent;
   int host_num;
+  int seq_num;
+  int wind_num;
+  char ** window;
 
 
 
@@ -77,16 +80,16 @@ int main(int argc, char* argv[]) {
 
   //conversion function from a sequence number to the file location
 
-  
-
-
-
-
-
-
 
   
 
+
+
+
+
+
+
+  
 
 
 
@@ -112,6 +115,7 @@ int main(int argc, char* argv[]) {
 char * seq_to_addr(int seq_num, int wind_num, char**window) {
   if (seq_num - wind_num >= 50) {
     fprintf(1, "invalid sequence number.\n");
+    return NULL;
   }
   int length = strlen(window);
   return window[seq_num % length];
