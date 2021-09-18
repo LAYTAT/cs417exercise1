@@ -24,11 +24,10 @@ int main(int argc, char* argv[]) {
   struct hostent        *p_h_ent;
   int host_num;
   int seq_num;
-  int wind_num;
+  int wind_num = 0;
   char ** window;
 
-
-
+  window = (char *) malloc (WIND_SIZE * sizeof(char *)); // window keeps the first 50 pointers to 50 seqeunce numbers after the ack
 
   //check command line args
   if (argc != 4) {
@@ -78,22 +77,7 @@ int main(int argc, char* argv[]) {
   
   //connected to the host!
 
-  //conversion function from a sequence number to the file location
-
-
   
-
-
-
-
-
-
-
-  
-
-
-
-
 
 
 
@@ -117,7 +101,6 @@ char * seq_to_addr(int seq_num, int wind_num, char**window) {
     fprintf(1, "invalid sequence number.\n");
     return NULL;
   }
-  int length = strlen(window);
-  return window[seq_num % length];
+  return window[seq_num % WIND_SIZE];
 }
 
