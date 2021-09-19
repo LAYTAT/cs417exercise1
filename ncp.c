@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
         serv_len = sizeof(serv_addr);
         n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, serv_len);
         if (Recieved_Packet.type == 7) { //last packet recieved by the server
-          fprint(1, "Last Packet Delivered Succesfully.\n");
+          fprintf(1, "Last Packet Delivered Succesfully.\n");
           break;
         } else if (Recieved_Packet.type = 3) { //feedback packet recieved
           /*respond to nacks + slide/update window + send packets*/
