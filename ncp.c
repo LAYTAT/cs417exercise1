@@ -35,11 +35,10 @@ int main(int argc, char* argv[]) {
   int n;
   int serv_len;
   int num;
-  int nread;
 
   //check command line args
   if (argc != 4) {
-    perrer("invalid command line argument.\n");
+    perror("invalid command line argument.\n");
     exit(1);
   }
 
