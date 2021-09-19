@@ -10,17 +10,14 @@
 #include <netinet/in.h> 
 #include <netdb.h>
 #include "cs417Ex1/sendto_dbg.h"
-
+#include <sys/time.h>
 #include <errno.h>
 
 #define PORT (10040)
 //#define PORT (10280)
-
 #define MAX_MESS_LEN (1400)
-
 #define BUFSIZE (300)
 #define WINDOW_SIZE (10)
-
 #define MAX_LOSS_RATE_PERCENT (25)
 
 struct File_Data {

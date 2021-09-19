@@ -48,6 +48,11 @@ int main(int argc, char * argv[]){
     FILE *                  fPtr = NULL;                            //file pointer to write stuff into
     int                     ready_packet_flag = 0;
     int                     NORMAL_TIMEOUT = 10;
+    int                     EVERY_100M_IN_NUMS_OF_PACKET = (104857600/sizeof(struct File_Data));
+    struct timeval          com_start_timestmp;
+    struct timeval          finished_timestmp;
+    struct timeval          last_timestamp;
+    int                     last_seq;
 
     //debug usage
     char                    s[INET6_ADDRSTRLEN];
@@ -148,6 +153,10 @@ int main(int argc, char * argv[]){
                             /* set timer for ready pakcet */
                             timeout.tv_sec = 20;
                             ready_packet_flag = 1;
+
+                           /* this is where communication starts */
+                            gettimeofday(&com_start_timestmp, NULL);
+
                         } else {
                             /* indicates rejection to sender */
                             reply_to_init_pckt.type = 4;
@@ -208,12 +217,27 @@ int main(int argc, char * argv[]){
                             /* write cumulated datas data into file */
                             fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
 
-                            /*        TODO: Both the sender (ncp) and the receiver (rcv) programs should report two statistics
-                            *          every 100Mbytes of data sent/received IN ORDER (all the data from the beginning of
-                            *          the file to that point was received with no gaps):
+                            /*         TODO: Both the sender (ncp) and the receiver (rcv) programs should report two statistics
+                             *          every 100Mbytes of data sent/received IN ORDER (all the data from the beginning of
+                             *          the file to that point was received with no gaps):
                              *          1) The total amount of data (in Mbytes) successfully transferred by that time.
                              *          2) The average transfer rate of the last 100Mbytes sent/received (in Mbits/sec).
                              *          */
+                            if (window_start == 0) {
+                                /* get start time */
+                                gettimeofday(&last_timestamp, NULL);
+                                last_seq = 0;
+                            }
+                            if (window_start != 0 && window_start % EVERY_100M_IN_NUMS_OF_PACKET == 0) {
+                                struct timeval timestamp;
+                                gettimeofday(&timestamp, NULL);
+                                printf("The total amount of data (in Mbytes) successfully transferred is %0.2f\n The average transfer rate is %0.2f",
+                                       ((float)window_start * sizeof (struct File_Data)) / (1024 * 1024 ),
+                                       (((float)(window_start - last_seq)* sizeof (struct File_Data)) / (1024 * 1024 )) * 8  /  (timestamp.tv_sec - last_timestamp.tv_sec)
+                                       );
+                                gettimeofday(&last_timestamp, NULL);
+                                last_seq = window_start;
+                            }
 
                             /* send feedback to the sender */
                             sendto_dbg(socket_fd,
@@ -241,14 +265,15 @@ int main(int argc, char * argv[]){
                                 }
                             }
                         } else {
-                           /* if all files received */
-
-                           /*   TODO At the end of the transfer, both sender and receiver programs should report the size
-                            *   of the file transferred, the amount of time required for the transfer, and the
-                            *   average rate at which the communication occurred (in Mbits/sec).
-                            */
-
-                           printf("hooray, all file data is received!\n");
+                           /* if all files received
+                            * report statistics*/
+                            printf("The size of the file transferred is %.2f Bytes\n ",
+                                   (float)current_ack_seq_num * sizeof (struct File_Data));
+                            gettimeofday(&finished_timestmp, NULL);
+                            printf("The amount of time required for the transfer is %d seconds\n ",
+                                   (int) (finished_timestmp.tv_sec - com_start_timestmp.tv_sec));
+                            printf("average rate at which the communication occurred (in Mbits/sec) is %.2f\n ",
+                                   (float)current_ack_seq_num * sizeof (struct File_Data) * 1024*1024*8 / (finished_timestmp.tv_sec - com_start_timestmp.tv_sec));
                         }
 
                     /* send feedback */
