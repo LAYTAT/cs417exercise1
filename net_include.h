@@ -32,8 +32,9 @@ struct packet {
                         // 4 for rejection to sender
                         // 5 for saying ready to sender
                         // 6 for last Sender Packect
-    int seq_num;        // for Sender Packet
-    int size;           // final Sender Packet size will be smaller than BUFSIZE
+    int seq_num;        // for Sender Packet , -1 for nothing
+    int size;           // final Sender Packet size will be smaller than BUFSIZE 
+                        // also can store the lenght of filename
     int cumu_acks;      // cumulative acks specified by  Feedback Packet
     int nack[WINDOW_SIZE]; // lost packets specified by Feedback Packet
     struct File_Data data; // where the Sender Packet stores their data and Sender Init Packet store the dest file name

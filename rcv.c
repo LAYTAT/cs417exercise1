@@ -120,6 +120,9 @@ int main(){
                         timeout.tv_sec = NORMAL_TIMEOUT;
                         ready_packet_flag = 0;
 
+                       /* keep track in order to send feedback */
+                        received_counter ++;
+
                         /* packet at a valid position in the current window */
                         int idx_in_window = packet_buf.seq_num - window_start;
                         if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
@@ -127,11 +130,9 @@ int main(){
                             memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
                             window_slots[idx_in_window] = 1;
 
-                            received_counter ++;
-
                             /* time to send feedback */
-                            if (received_counter == window_start - 1) {
-                                received_counter = 0;
+                            if (received_counter == WINDOW_SIZE ) {
+                                received_counter =  0;
                                 memset(&feedback, 0, sizeof (feedback));
 
                                 int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
@@ -143,13 +144,12 @@ int main(){
                                         feedback.nack[i] = window_start + i;
                                     }
                                 }
-
                                 /* write cumulated packets into a file */
                                 window_start = window_start + ackFromWindowStart;
 
                                 /* write cumulated datas data into file */
                                 fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
-                                
+
                                 /* send feedback to the sender */
                                 sendto(socket_fd, &feedback, sizeof(feedback), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
                             }
@@ -160,6 +160,24 @@ int main(){
 
                     /* received last sender packetk */
                     case 6:
+                        /*clean feedback before writing infos on it*/
+                        memset(&feedback, 0, sizeof (feedback));
+
+                        /* check current window if all file datas valid */
+                        int current_ack_seq_num = calAckFromWindowStart(window_slots, WINDOW_SIZE) + window_start;
+                        if (current_ack_seq_num !=  packet_buf.seq_num - 1){
+                            /* generate nack[WINDOW_SIZE] and put into feedback*/
+                            for(int i = 0; i < WINDOW_SIZE; ++i) {
+                                if(window_slots[i] != 1) {
+                                    feedback.nack[i] = window_start + i;
+                                }
+                            }
+                        } else {
+                           /* if all files received */
+                           printf("hooray, all file data is received !");
+                        }
+
+                    /* send feedback */
                         /*write final into file and close file*/
                         fwrite(&packet_buf.data , sizeof(struct File_Data), 1 , fPtr);
 
