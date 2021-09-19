@@ -245,9 +245,11 @@ int main(int argc, char* argv[]) {
             x--;
             i++;
 
+
             if (seq_num == total_packets) {
               continue;
             }
+
           }
         } else {
           fprintf(1, "recieved unexpected packet type.\n");
