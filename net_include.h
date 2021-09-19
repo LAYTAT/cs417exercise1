@@ -20,6 +20,8 @@
 #define BUFSIZE 300
 #define WINDOW_SIZE 10
 
+#define MAX_LOSS_RATE_PERCENT (0.25f)
+
 struct File_Data {
     unsigned char data[BUFSIZE];
 };

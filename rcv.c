@@ -15,7 +15,7 @@ int calAckFromWindowStart(const int * begin, int size) {
     return count;
 }
 
-int main(){
+int main(int argc, char * argv[]){
     struct sockaddr_in      serv_addr;                              // storing own addr, use for binding
     struct sockaddr_in      client_addr;                            // storing current client addr
     int                     status = 0;                             // indicate current status: 0 for available, 1 for occupied
@@ -40,6 +40,18 @@ int main(){
     FILE *                  fPtr = NULL;                            //file pointer to write stuff into
     int                     ready_packet_flag = 0;
     int                     NORMAL_TIMEOUT = 10;
+
+    if (argc != 2) {
+        printf("please just enter lost_rate,\n usage: rcv loss_rate_percent\n");
+        exit(1);
+    }
+
+    // TODO: add loss rate support
+    float lrp = atof(argv[1]);
+    if (lrp > MAX_LOSS_RATE_PERCENT ) {
+        printf("%.2f is invalid loss rate, using 0.25 now \n", lrp);
+        lrp = MAX_LOSS_RATE_PERCENT;
+    }
 
     /* server socket for communicating with clients */
     socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
