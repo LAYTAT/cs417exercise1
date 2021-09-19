@@ -26,6 +26,9 @@ ncp: ncp.o sendto_dbg.o
 rcv: rcv.o sendto_dbg.o
 		$(CC) -o rcv rcv.o sendto_dbg.o
 
+sendto_dbg.o: cs417Ex1/sendto_dbg.c
+		$(CC) $(CFLAGS) cs417Ex1/sendto_dbg.c
+
 clean:
 	rm *.o
 	rm net_server 
