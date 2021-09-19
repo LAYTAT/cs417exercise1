@@ -46,12 +46,14 @@ int main(int argc, char * argv[]){
         exit(1);
     }
 
-    // TODO: add loss rate support
-    float lrp = atof(argv[1]);
+   /* add loss rate to send function */
+    int lrp = atoi(argv[1]);
     if (lrp > MAX_LOSS_RATE_PERCENT ) {
-        printf("%.2f is invalid loss rate, using 0.25 now \n", lrp);
+        printf("%d is invalid loss rate, using %d now \n", lrp, MAX_LOSS_RATE_PERCENT);
         lrp = MAX_LOSS_RATE_PERCENT;
     }
+    /* Call this once to initialize the coat routine */
+    sendto_dbg_init(lrp);
 
     /* server socket for communicating with clients */
     socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -124,7 +126,12 @@ int main(int argc, char * argv[]){
                             reply_to_init_pckt.type = 4;
                             printf("rejection for receiving sent\n");
                         }
-                        sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+                        sendto_dbg(socket_fd,
+                                   (const char *)  &reply_to_init_pckt,
+                                   sizeof(reply_to_init_pckt),
+                                   0,
+                                   (struct sockaddr *) &client_addr,
+                                   sizeof(client_addr));
                         break;
 
                     /* if it is a sender packet, which contains the file data */
@@ -175,7 +182,12 @@ int main(int argc, char * argv[]){
                             fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
 
                             /* send feedback to the sender */
-                            sendto(socket_fd, &feedback, sizeof(feedback), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+                            sendto_dbg(socket_fd,
+                                       (const char *) &feedback,
+                                       sizeof(feedback),
+                                       0,
+                                       (struct sockaddr *) &client_addr,
+                                       sizeof(client_addr));
                         }
 
                         break;
@@ -216,7 +228,13 @@ int main(int argc, char * argv[]){
             /*if timeout for readypacket */
             if (ready_packet_flag) {
                 /*  resend the ready packet */
-                sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+                sendto_dbg(socket_fd,
+                           (const char *) &reply_to_init_pckt,
+                           sizeof(reply_to_init_pckt),
+                           0,
+                           (struct sockaddr *) &client_addr,
+                           sizeof(client_addr));
+
                 printf("timeout for ready packet... resending ready packet\n");
             }
 
