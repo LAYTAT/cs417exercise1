@@ -3,7 +3,7 @@ CC=gcc
 CFLAGS = -g -c -Wall -pedantic
 #CFLAGS = -ansi -c -Wall -pedantic
 
-all: ucast net_client net_server myip file_copy
+all: ucast net_client net_server myip file_copy rcv ncp
 
 net_server: net_server.o
 	    $(CC) -o net_server net_server.o  

@@ -2,6 +2,7 @@
 // Created by JJ Lay on 9/14/21.
 //
 #include "net_include.h"
+#include "arpa/inet.h" //for inet_ntop used for show debug info
 
 int calAckFromWindowStart(const int * begin, int size) {
     int count = 0;
@@ -13,6 +14,13 @@ int calAckFromWindowStart(const int * begin, int size) {
         }
     }
     return count;
+}
+
+void* get_in_addr(struct sockaddr *sa) {
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
 int main(int argc, char * argv[]){
@@ -40,6 +48,9 @@ int main(int argc, char * argv[]){
     FILE *                  fPtr = NULL;                            //file pointer to write stuff into
     int                     ready_packet_flag = 0;
     int                     NORMAL_TIMEOUT = 10;
+
+    //debug usage
+    char                    s[INET6_ADDRSTRLEN];
 
     if (argc != 2) {
         printf("please just enter lost_rate,\n usage: rcv loss_rate_percent\n");
@@ -89,12 +100,28 @@ int main(int argc, char * argv[]){
         if (num > 0) {
             if ( FD_ISSET( socket_fd, &read_mask) ) {
                 from_len = sizeof(from_addr);
+                /* receiving data and store it in the message buffer */
                 bytes_recved = recvfrom( socket_fd, mess_buf, sizeof(mess_buf), 0,
                                   (struct sockaddr *)&from_addr,
-                                  &from_len ); // receiving data and store it in the message buffer
+                                  &from_len );
 
-                if (bytes_recved != -1) { // if received message, write it into a packet struct
+                /* for debug usage */
+                printf("rcv: got packet from %s \n",
+                       inet_ntop(from_addr.sin_family,
+                                 get_in_addr((struct sockaddr *)&from_addr),
+                                 s,
+                                 sizeof (s)
+                       ));
+
+                /* if received message, write it into a packet struct  */
+                if (bytes_recved != -1) {
                     memcpy(&packet_buf, &mess_buf, sizeof(packet_buf));
+                } else {
+                    perror("rcv: recvfrom error");
+                    exit(1);
+                }
+                if (bytes_recved < sizeof(struct packet)) {
+                    printf("packet is corrupt.\n");
                 }
 
                 if (packet_buf.type == 0) {
@@ -181,6 +208,13 @@ int main(int argc, char * argv[]){
                             /* write cumulated datas data into file */
                             fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
 
+                            /*        TODO: Both the sender (ncp) and the receiver (rcv) programs should report two statistics
+                            *          every 100Mbytes of data sent/received IN ORDER (all the data from the beginning of
+                            *          the file to that point was received with no gaps):
+                             *          1) The total amount of data (in Mbytes) successfully transferred by that time.
+                             *          2) The average transfer rate of the last 100Mbytes sent/received (in Mbits/sec).
+                             *          */
+
                             /* send feedback to the sender */
                             sendto_dbg(socket_fd,
                                        (const char *) &feedback,
@@ -208,6 +242,12 @@ int main(int argc, char * argv[]){
                             }
                         } else {
                            /* if all files received */
+
+                           /*   TODO At the end of the transfer, both sender and receiver programs should report the size
+                            *   of the file transferred, the amount of time required for the transfer, and the
+                            *   average rate at which the communication occurred (in Mbits/sec).
+                            */
+
                            printf("hooray, all file data is received!\n");
                         }
 
