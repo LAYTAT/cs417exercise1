@@ -5,8 +5,6 @@
 //ncp send files in packets
 //ncp is the client
 int gethostname(char*,size_t);
-char * seq_to_addr(int sequence_number, int window_number, char ** window);
-
 
 int main(int argc, char* argv[]) {
 
@@ -23,7 +21,7 @@ int main(int argc, char* argv[]) {
   struct hostent *p_h_ent;
   int host_num;
   int seq_num;
-  int wind_num = 0;
+  int wind_num = 0; //keeps track of the start of the window index
   char ** window;
   int server_flag= 0; /* 1: server ready, 0: server not ready */
   fd_set mask;
@@ -31,10 +29,14 @@ int main(int argc, char* argv[]) {
   struct timeval timeout;
   struct packet Initial_Packet;
   struct packet Recieved_Packet;
+  struct packet Send_Packet;
   int NORMAL_TIMEOUT = 10;
-  int n;
+  int n, m;
   int serv_len;
   int num;
+  int ack = -1;
+  char * temp_addr;
+  int total_packets;
 
   //check command line args
   if (argc != 4) {
@@ -63,6 +65,11 @@ int main(int argc, char* argv[]) {
     perror("fopen");
     exit(0);
   }
+
+  fseek(fr, 0, SEEK_END);
+  total_packets = ftell(fr);
+  rewind(fr);
+
   
   //implement socket as a client
   ss = socket(AF_INET, SOCK_DGRAM, 0); /* socket for sending (udp) */
@@ -112,7 +119,7 @@ int main(int argc, char* argv[]) {
       if (FD_ISSET(ss, &read_mask)) {
         serv_len = sizeof(serv_addr);
         n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, serv_len);
-        if (Recieved_Packet.type == 4) { //rejecte
+        if (Recieved_Packet.type == 4) { //reject
           server_flag = 0;
           break;
         } else if (Recieved_Packet.type == 5) {//server ready
@@ -131,20 +138,47 @@ int main(int argc, char* argv[]) {
     window_data[i] = (char *) malloc(BUF_SIZE+1);  //buf_size + 1 for the null character
   }
 
-  //initialize window buffer with data pointers; (first window numbered data)
+  //initialize window buffer with data pointers; (first window numbered data); 
   for (int i = 0; i < WINDOW_SIZE; i++) {
     nread = fread(buf, 1, BUF_SIZE, fr);
     buf[nread] = 0; //add null character
     memcpy(window_data[i], buf, strlen(buf)+1);
     memset(buf, 0, sizeof(buf)); 
+    nread = 0;
+  }
+
+  struct File_Data data_buf;
+
+  //send initialized to the server (first window-sized packets)
+  if (server_flag == 1) {
+    for (int i = 0; i < WINDOW_SIZE; i++) {
+      memset(&data_buf, 0, sizeof(data_buf));
+      memset(&Send_Packet, 0, sizeof(Send_Packet));
+
+      if (i == total_packets) {
+        Send_Packet.type = 6;
+      } else {
+        Send_Packet.type = 2;
+      }
+
+      Send_Packet.size = strlen(window_data[i]);
+      Send_Packet.seq_num = i;
+      memcpy(data_buf.data, window_data[i], sizeof(window_data));
+      Send_Packet.data = data_buf;
+      sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+
+      if (i == total_packets) {
+        break;
+      }
+    }
   }
 
 
   //send the file data
   while (server_flag == 1) { //server is ready to recieve
     read_mask = mask;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 1;
+    timeout.tv_sec = 3;
+    timeout.tv_usec = 0;
 
     memset(&Recieved_Packet, 0, sizeof(Recieved_Packet));
 
@@ -154,39 +188,87 @@ int main(int argc, char* argv[]) {
         serv_len = sizeof(serv_addr);
         n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, serv_len);
         if (Recieved_Packet.type == 7) { //last packet recieved by the server
+          fprint(1, "Last Packet Delivered Succesfully.\n");
           break;
         } else if (Recieved_Packet.type = 3) { //feedback packet recieved
-          
-          
+          /*respond to nacks + slide/update window + send packets*/
+
+          //respond to nacks
+          for (int i = 0; i < (int)(sizeof(Recieved_Packet.nack)/sizeof(Recieved_Packet.nack[0])); i++) { 
+            memset(&data_buf, 0, sizeof(data_buf));
+            memset(&Send_Packet, 0, sizeof(Send_Packet));
+            seq_num = Recieved_Packet.nack[i];
+            m = seq_num % WINDOW_SIZE; //index in the window 
+
+            Send_Packet.type = 2;
+            Send_Packet.size = strlen(window_data[m]);
+            Send_Packet.seq_num = m;
+            memcpy(data_buf.data, window_data[m], sizeof(window_data));
+            Send_Packet.data = data_buf;
+            sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+          }
+
+          // slide/update window + send those packets
+          ack = Recieved_Packet.cumu_acks; //sequence number of the cum_acks, i.e. ack % 50, is the end location of window update
+
+          int begin_i = wind_num % WINDOW_SIZE; //beginning index to modify window
+          //int end_i = ack % WINDOW_SIZE; //last index to modify window
+          int x = ack - wind_num + 1; //number of modifications have to be made
+          int i = begin_i; //index of current location of modification
+          while (x != 0) {
+            if (i == WINDOW_SIZE) {
+              i = i % WINDOW_SIZE;
+            }
+            memset(buf, 0, sizeof(buf)); 
+            memset(window_data[i], 0, sizeof(window_data[i]));
+            nread = fread(buf, 1, BUF_SIZE, fr);
+            buf[nread] = 0; //add null character
+            memcpy(window_data[i], buf, strlen(buf)+1);
+
+            memset(&data_buf, 0, sizeof(data_buf));
+            memset(&Send_Packet, 0, sizeof(Send_Packet));
+            seq_num = i + WINDOW_SIZE * (wind_num/WINDOW_SIZE + 1);
+
+            if (seq_num == total_packets) {
+              Send_Packet.type = 6;
+            } else {
+              Send_Packet.type = 2;
+            }
+
+            Send_Packet.size = strlen(window_data[i]);
+            Send_Packet.seq_num = seq_num;
+            memcpy(data_buf.data, window_data[i], sizeof(window_data));
+            Send_Packet.data = data_buf;
+            sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+
+            wind_num++;
+            x--;
+            i++;
+
+            if (seq_num == total_packets) {
+              continue;
+            }
+          }
+        } else {
+          fprintf(1, "recieved unexpected packet type.\n");
+          break;
         }
-
-
+      } else { //timeout
+        printf(".");
+        fflush(0);
       }
-      n = 0;
+      
     }
-
 
   }
 
-
+  for (int i =0; i < WINDOW_SIZE; i++) {
+    free(window[i]);
+  }
   free(window);
-
-
 
   fclose(fr);
 
-
   return 0;
-}
-
-//window stores window_sized addresses of corresponding window_sized seqeunce numbers 
-//sequence number is the overall location of the data within the file
-//wind_num denotes how far the window has slided
-char * seq_to_addr(int seq_num, int wind_num, char**window) {
-  if (seq_num - wind_num >= 50) {
-    fprintf(1, "invalid sequence number.\n");
-    return NULL;
-  }
-  return window[seq_num % WIND_SIZE];
 }
 
