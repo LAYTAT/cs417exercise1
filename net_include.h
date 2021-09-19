@@ -32,6 +32,7 @@ struct packet {
                         // 4 for rejection to sender
                         // 5 for saying ready to sender
                         // 6 for last Sender Packect
+                        // 7 for last ack
     int seq_num;        // for Sender Packet , -1 for nothing
     int size;           // final Sender Packet size will be smaller than BUFSIZE 
                         // also can store the lenght of filename
