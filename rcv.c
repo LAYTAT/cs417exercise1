@@ -39,7 +39,7 @@ int main(){
                             feedback.type = 3;
     FILE *                  fPtr = NULL;                            //file pointer to write stuff into
     int                     ready_packet_flag = 0;
-    int                     NORMAL_TIMEOUT = 1;
+    int                     NORMAL_TIMEOUT = 10;
 
     /* server socket for communicating with clients */
     socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -84,7 +84,7 @@ int main(){
                 }
 
                 if (packet_buf.type == 0) {
-                    printf("packet is not successfully received.");
+                    printf("packet is not successfully received.\n");
                 }
 
                 switch (packet_buf.type) {
@@ -101,17 +101,18 @@ int main(){
                             memcpy(&destFilename, &packet_buf.data, sizeof (char) * filename_size);
                             fPtr = fopen(destFilename, "wb"); // open the file with binary mode
                             if (fPtr == NULL) {
-                                printf("file opening failed");
+                                printf("file opening failed\n");
                             }
 
                             /* set timer for ready pakcet */
-                            timeout.tv_sec = 2;
+                            timeout.tv_sec = 20;
                             ready_packet_flag = 1;
                         } else {
                             /* indicates rejection to sender */
                             reply_to_init_pckt.type = 4;
+                            printf("rejection for receiving sent\n");
                         }
-                        sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &from_addr, sizeof(from_addr));
+                        sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
                         break;
 
                     /* if it is a sender packet, which contains the file data */
@@ -130,32 +131,41 @@ int main(){
                             memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
                             window_slots[idx_in_window] = 1;
 
-                            /* time to send feedback */
-                            if (received_counter == WINDOW_SIZE ) {
-                                received_counter =  0;
-                                memset(&feedback, 0, sizeof (feedback));
-
-                                int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
-                                feedback.cumu_acks = window_start + ackFromWindowStart;
-
-                                // generate nack[WINDOW_SIZE]
-                                for(int i = 0; i < WINDOW_SIZE; ++i) {
-                                    if(window_slots[i] != 1) {
-                                        feedback.nack[i] = window_start + i;
-                                    }
-                                }
-                                /* write cumulated packets into a file */
-                                window_start = window_start + ackFromWindowStart;
-
-                                /* write cumulated datas data into file */
-                                fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
-
-                                /* send feedback to the sender */
-                                sendto(socket_fd, &feedback, sizeof(feedback), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
-                            }
                         } else {
-                            printf("packet already received or ahead of window");
+                            printf("packet already received or ahead of window\n");
                         }
+
+                        /* time to send feedback */
+                        if (received_counter == WINDOW_SIZE ) {
+                            received_counter =  0;
+                            memset(&feedback, 0, sizeof (feedback));
+
+                            int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
+                            feedback.cumu_acks = window_start + ackFromWindowStart;
+
+                            // generate nack[WINDOW_SIZE]
+                            for(int i = 0; i < WINDOW_SIZE; ++i) {
+                                if(window_slots[i] != 1) {
+                                    feedback.nack[i] = window_start + i;
+                                }
+                            }
+                            /* write cumulated packets into a file */
+                            window_start = window_start + ackFromWindowStart;
+
+                            /* renew window slots */
+                            int tmp = ackFromWindowStart;
+                            while(tmp >= 0) {
+                                window_slots[tmp] = 0;
+                                tmp--;
+                            }
+
+                            /* write cumulated datas data into file */
+                            fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
+
+                            /* send feedback to the sender */
+                            sendto(socket_fd, &feedback, sizeof(feedback), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+                        }
+
                         break;
 
                     /* received last sender packetk */
@@ -174,7 +184,7 @@ int main(){
                             }
                         } else {
                            /* if all files received */
-                           printf("hooray, all file data is received !");
+                           printf("hooray, all file data is received!\n");
                         }
 
                     /* send feedback */
@@ -183,8 +193,10 @@ int main(){
 
                         /* Close file to save file data */
                         fclose(fPtr);
+
+                        break;
                     default:
-                        printf("unknown type of packet received.");
+                        printf("unknown type of packet received.\n");
                 }
 
             }
@@ -192,11 +204,11 @@ int main(){
             /*if timeout for readypacket */
             if (ready_packet_flag) {
                 /*  resend the ready packet */
-                sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &from_addr, sizeof(from_addr));
-                printf("timeout for ready packet...");
+                sendto(socket_fd, &reply_to_init_pckt, sizeof(reply_to_init_pckt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+                printf("timeout for ready packet... resending ready packet\n");
             }
 
-            printf("not receiving anything from anyone...");
+            printf("not receiving anything from anyone...\n");
             fflush(0);
         }
     }
