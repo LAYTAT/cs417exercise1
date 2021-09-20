@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
   memcpy(fn.data, dest_fn, strlen(dest_fn));
   Initial_Packet.data = fn;
 
-  //keep sending the initial packet until it recieves a feedback
+  //keep sending the initial packet until it receives a feedback
   for(;;) {
 
     read_mask = mask;
@@ -240,7 +240,7 @@ int main(int argc, char* argv[]) {
               i = i % WINDOW_SIZE;
             }
             memset(buf, 0, sizeof(buf)); 
-            memset(window_data[i], 0, sizeof(window_data[i]));
+            memset(window_data[i], 0, strlen(window_data[i]));
             nread = fread(buf, 1, BUFSIZE, fr);
             buf[nread] = 0; //add null character
             memcpy(window_data[i], buf, strlen(buf)+1);
