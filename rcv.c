@@ -274,6 +274,16 @@ int main(int argc, char * argv[]){
                                    (int) (finished_timestmp.tv_sec - com_start_timestmp.tv_sec));
                             printf("average rate at which the communication occurred (in Mbits/sec) is %.2f\n ",
                                    (float)current_ack_seq_num * sizeof (struct File_Data) * 1024*1024*8 / (finished_timestmp.tv_sec - com_start_timestmp.tv_sec));
+
+                            feedback.type = 7;
+                            feedback.cumu_acks = current_ack_seq_num;
+                            /* send feedback to the sender */
+                            sendto_dbg(socket_fd,
+                                       (const char *) &feedback,
+                                       sizeof(feedback),
+                                       0,
+                                       (struct sockaddr *) &client_addr,
+                                       sizeof(client_addr));
                         }
 
                     /* send feedback */

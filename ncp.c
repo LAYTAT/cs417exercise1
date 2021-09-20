@@ -9,11 +9,11 @@ int gethostname(char*,size_t);
 int main(int argc, char* argv[]) {
 
   float lrp; //loss rate percentage
-  char * source_fname; //source file name
-  char * dest_fn; //destination file name
-  char * comp_name; //computer name, i.e.ugrad1 of the HOST (i.e. host_name)
+  char source_fname[BUF_SIZE]; //source file name
+  char dest_fn[BUF_SIZE]; //destination file name
+  char comp_name[BUF_SIZE]; //computer name, i.e.ugrad1 of the HOST (i.e. host_name)
   FILE * fr; /* Pointer to source file, which we read */
-  char * buf[BUF_SIZE+1];
+  char buf[BUF_SIZE+1];
   int nread;
   int ss;  /*socket for sending*/
   struct sockaddr_in serv_addr; /*server address info*/
@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   int serv_len;
   int num;
   int ack = -1;
-  char * temp_addr;
+  char temp_addr[BUF_SIZE];
   int total_packets;
 
   //check command line args
@@ -45,10 +45,8 @@ int main(int argc, char* argv[]) {
   }
 
   lrp = atof(argv[1]);
-  source_fname = argv[2];
-
-  dest_fn[strlen(argv[3])-6];
-  comp_name[7];
+  strcpy(source_fname, argv[2]);
+  
   int div = strlen(argv[3]) - 6;
   for (int i = 0; i < div; i++) {
     dest_fn[i] = argv[3][i];
@@ -67,7 +65,7 @@ int main(int argc, char* argv[]) {
   }
 
   fseek(fr, 0, SEEK_END);
-  total_packets = ftell(fr);
+  total_packets = ftell(fr)/sizeof(struct File_Data);
   rewind(fr);
 
   
