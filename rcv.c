@@ -185,11 +185,11 @@ int main(int argc, char * argv[]){
 
                         /* packet at a valid position in the current window */
                         idx_in_window = packet_buf.seq_num - window_start;
+
                         if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
                         {
                             memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
                             window_slots[idx_in_window] = 1;
-
                         } else {
                             printf("packet already received or ahead of window\n");
                         }
@@ -217,32 +217,33 @@ int main(int argc, char * argv[]){
                             last_seq = window_start;
                         }
 
-                        /* keep track in order to know when to send feedback */
+                        /* windwow sliding */
+                        /* update cumu ack when receive a valid packet*/
+                        int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
+                        /* renew window slots */
+                        int tmp = ackFromWindowStart - 1;
+                        while(tmp >= 0) {
+                            // window_slots[i] == 0 mean not received
+                            window_slots[tmp] = 0;
+                            tmp--;
+                        }
+                        /* write cumulated packets into a file */
+                        int start_idx_of_file_buf = window_start % WINDOW_SIZE;
+                        window_start = window_start + ackFromWindowStart;
+
+                        /* write cumulated datas data into file */
+                        //fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
+                        for ( int i = 0 ; i < ackFromWindowStart; ++i ){
+                            int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
+//                            fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
+                            fwrite(&window[i] , sizeof(struct File_Data), 1 , fPtr);
+                        } // TODO: need better file writing
+
+                        /* send feedback */
                         received_counter ++;
-                        /* time to send feedback */
-                        if (received_counter == WINDOW_SIZE ) {
+                        /* keep track in order to know when to send feedback */
+                        if (received_counter == WINDOW_SIZE / FEEDBACK_DEVIDER) {
                             received_counter =  0;
-
-                            /* TODO: windwow sliding and writing file mechanism */
-                            /* update cumu ack when receive a valid packet*/
-                            int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
-                            /* renew window slots */
-                            int tmp = ackFromWindowStart - 1;
-                            while(tmp >= 0) {
-                                // window_slots[i] == 0 mean not received
-                                window_slots[tmp] = 0;
-                                tmp--;
-                            }
-                            /* write cumulated packets into a file */
-                            int start_idx_of_file_buf = window_start % WINDOW_SIZE;
-                            window_start = window_start + ackFromWindowStart;
-                            /* write cumulated datas data into file */
-                            //fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
-                            for ( int i = 0 ; i < ackFromWindowStart; ++i ){
-                                int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
-                                fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
-                            } // TODO: need better file writing
-
 
                             /* send feedback to the sender */
                             memset(&feedback, -1, sizeof (feedback));
@@ -282,7 +283,6 @@ int main(int argc, char * argv[]){
                             window_slots[idx_in_window] == 0) {
                             memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
                             window_slots[idx_in_window] = 1;
-
                         } else {
                             printf("packet already received or ahead of window\n");
                         }
@@ -329,20 +329,21 @@ int main(int argc, char * argv[]){
                             int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
                             int start_idx_of_file_buf = window_start % WINDOW_SIZE;
                             for (int i = 0; i < ackFromWindowStart; ++i) {
-                                int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
-                                fwrite(&window[idx_of_file_buf], sizeof(struct File_Data), 1, fPtr);
+                                //int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
+                                //fwrite(&window[idx_of_file_buf], sizeof(struct File_Data), 1, fPtr);
+                                fwrite(&window[i], sizeof(struct File_Data), 1, fPtr);
                             }
                             /* Close file to save file data */
 
                             fclose(fPtr);
                             status = 0; // make server available now
                             /* renew window slots */
-                            int tmp = WINDOW_SIZE - 1;
-                            while (tmp >= 0) {
-                                // window_slots[i] == 0 mean not received
-                                window_slots[tmp] = 0;
-                                tmp--;
-                            }
+//                            int tmp = WINDOW_SIZE - 1;
+//                            while (tmp >= 0) {
+//                                // window_slots[i] == 0 mean not received
+//                                window_slots[tmp] = 0;
+//                                tmp--;
+//                            }
 
                             //send confirmation feedback
                             memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
