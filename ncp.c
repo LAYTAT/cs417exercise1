@@ -1,4 +1,5 @@
 #include "net_include.h"
+#include "math.h"
 
 #define BUF 50
 //ncp send files in packets
@@ -244,7 +245,7 @@ int main(int argc, char* argv[]) {
 
             memset(&data_buf, 0, sizeof(data_buf));
             memset(&Send_Packet, 0, sizeof(Send_Packet));
-            seq_num = i + WINDOW_SIZE * (wind_num/WINDOW_SIZE + 1);
+            seq_num = i + WINDOW_SIZE * ( (int)floor((wind_num-i-1)/WINDOW_SIZE) + 1);
 
             if (seq_num == total_packets) {
               Send_Packet.type = 6;
