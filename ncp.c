@@ -1,7 +1,6 @@
 #include "net_include.h"
 
-#define WIND_SIZE 10
-#define BUF_SIZE 300
+#define BUF 50
 //ncp send files in packets
 //ncp is the client
 int gethostname(char*,size_t);
@@ -9,11 +8,11 @@ int gethostname(char*,size_t);
 int main(int argc, char* argv[]) {
 
   float lrp; //loss rate percentage
-  char source_fname[BUF_SIZE]; //source file name
-  char dest_fn[BUF_SIZE]; //destination file name
-  char comp_name[BUF_SIZE]; //computer name, i.e.ugrad1 of the HOST (i.e. host_name)
+  char source_fname[BUF]; //source file name
+  char dest_fn[BUF]; //destination file name
+  char comp_name[BUF]; //computer name, i.e.ugrad1 of the HOST (i.e. host_name)
   FILE * fr; /* Pointer to source file, which we read */
-  char buf[BUF_SIZE+1];
+  char buf[BUFSIZE + 1];
   int nread;
   int ss;  /*socket for sending*/
   struct sockaddr_in serv_addr; /*server address info*/
@@ -22,7 +21,6 @@ int main(int argc, char* argv[]) {
   int host_num;
   int seq_num;
   int wind_num = 0; //keeps track of the start of the window index
-  char ** window;
   int server_flag= 0; /* 1: server ready, 0: server not ready */
   fd_set mask;
   fd_set read_mask, write_mask, excep_mask;
@@ -35,8 +33,8 @@ int main(int argc, char* argv[]) {
   int serv_len;
   int num;
   int ack = -1;
-  char temp_adr[BUF_SIZE];
   int total_packets;
+  int ret = 0;
 
   //check command line args
   if (argc != 4) {
@@ -56,8 +54,8 @@ int main(int argc, char* argv[]) {
   }
   dest_fn[strlen(argv[3])-7] = 0;
   //comp_name[6] = 0;
-  memcpy(comp_name, "localhost", 9); //TODO: commnet before push
-  comp_name[10] = 0;
+  memcpy(comp_name, "localhost", 9); //TODO: to be deleted
+  comp_name[9] = 0;
 
     //open source file and parse so it can send
   /* Open the source file for reading */
@@ -119,7 +117,8 @@ int main(int argc, char* argv[]) {
       if (FD_ISSET(ss, &read_mask)) {
         serv_len = sizeof(serv_addr);
         n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, &serv_len);
-        perror("recvfrom:");
+        if (n == -1 )
+            perror("recvfrom in initial process:");
 
         if (Recieved_Packet.type == 4) { //reject
           server_flag = 0;
@@ -137,12 +136,12 @@ int main(int argc, char* argv[]) {
   /*Allocate enough memory for the buffer that contains the char pointers and the corresponding arrray*/
   char ** window_data = (char **) malloc(sizeof(char *) * WINDOW_SIZE); //array of char pointers to the specific string
   for (int i = 0; i < WINDOW_SIZE; i++) {
-    window_data[i] = (char *) malloc(BUF_SIZE+1);  //buf_size + 1 for the null character
+    window_data[i] = (char *) malloc(BUFSIZE + 1);  //buf_size + 1 for the null character
   }
 
   //initialize window buffer with data pointers; (first window numbered data); 
   for (int i = 0; i < WINDOW_SIZE; i++) {
-    nread = fread(buf, 1, BUF_SIZE, fr);
+    nread = fread(buf, 1, BUFSIZE, fr);
     buf[nread] = 0; //add null character
     if (nread == 0) {
         break;
@@ -170,7 +169,10 @@ int main(int argc, char* argv[]) {
       Send_Packet.seq_num = i;
       memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
       Send_Packet.data = data_buf;
-      sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+      ret = sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+      if (ret == -1) {
+          perror("sendto for initialization: ");
+      }
 
       if (i == total_packets - 1) {
           break;
@@ -191,26 +193,36 @@ int main(int argc, char* argv[]) {
     if (num > 0) {
       if (FD_ISSET(ss, &read_mask)) {
         serv_len = sizeof(serv_addr);
-        n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, serv_len);
+        n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, &serv_len);
+        if (n == -1) {
+            perror("recvfrom for feedback: ");
+        }
+
         if (Recieved_Packet.type == 7) { //last packet recieved by the server
-          fprintf(1, "Last Packet Delivered Succesfully.\n");
+          printf("Last Packet Delivered Succesfully.\n");
           break;
         } else if (Recieved_Packet.type == 3) { //feedback packet recieved
           /*respond to nacks + slide/update window + send packets*/
 
           //respond to nacks
           for (int i = 0; i < (int)(sizeof(Recieved_Packet.nack)/sizeof(Recieved_Packet.nack[0])); i++) { 
-            memset(&data_buf, 0, sizeof(data_buf));
-            memset(&Send_Packet, 0, sizeof(Send_Packet));
-            seq_num = Recieved_Packet.nack[i];
-            m = seq_num % WINDOW_SIZE; //index in the window 
+            if(Recieved_Packet.nack[i] != - 1) {
+                memset(&data_buf, 0, sizeof(data_buf));
+                memset(&Send_Packet, 0, sizeof(Send_Packet));
+                seq_num = Recieved_Packet.nack[i];
+                m = seq_num % WINDOW_SIZE; //index in the window
 
-            Send_Packet.type = 2;
-            Send_Packet.size = strlen(window_data[m]);
-            Send_Packet.seq_num = m;
-            memcpy(data_buf.data, window_data[m], sizeof(window_data));
-            Send_Packet.data = data_buf;
-            sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+                Send_Packet.type = 2;
+                Send_Packet.size = strlen(window_data[m]);
+                Send_Packet.seq_num = m;
+                memcpy(data_buf.data, window_data[m], sizeof(window_data));
+                Send_Packet.data = data_buf;
+                ret = sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+
+                if (ret == -1) {
+                    perror("sendto for feedback: ");
+                }
+            }
           }
 
           // slide/update window + send those packets
@@ -226,7 +238,7 @@ int main(int argc, char* argv[]) {
             }
             memset(buf, 0, sizeof(buf)); 
             memset(window_data[i], 0, sizeof(window_data[i]));
-            nread = fread(buf, 1, BUF_SIZE, fr);
+            nread = fread(buf, 1, BUFSIZE, fr);
             buf[nread] = 0; //add null character
             memcpy(window_data[i], buf, strlen(buf)+1);
 
@@ -244,8 +256,10 @@ int main(int argc, char* argv[]) {
             Send_Packet.seq_num = seq_num;
             memcpy(data_buf.data, window_data[i], sizeof(window_data));
             Send_Packet.data = data_buf;
-            sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
-
+            ret = sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+            if (ret == -1) {
+                perror("sendto: ");
+            }
             wind_num++;
             x--;
             i++;
@@ -257,7 +271,7 @@ int main(int argc, char* argv[]) {
 
           }
         } else {
-          fprintf(1, "recieved unexpected packet type.\n");
+          printf("recieved unexpected packet type.\n");
           break;
         }
       } else { //timeout
@@ -270,9 +284,8 @@ int main(int argc, char* argv[]) {
   }
 
   for (int i =0; i < WINDOW_SIZE; i++) {
-    free(window[i]);
+    free(window_data[i]);
   }
-  free(window);
 
   fclose(fr);
 

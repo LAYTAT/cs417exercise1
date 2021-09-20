@@ -54,6 +54,7 @@ int main(int argc, char * argv[]){
     struct timeval          finished_timestmp;
     struct timeval          last_timestamp;
     int                     last_seq;
+    int                     ret = -1;
 
     //debug usage
     char                    s[INET6_ADDRSTRLEN];
@@ -112,12 +113,12 @@ int main(int argc, char * argv[]){
                                   &from_len );
 
                 /* for debug usage */
-                printf("rcv: got packet from %s \n",
-                       inet_ntop(from_addr.sin_family,
-                                 get_in_addr((struct sockaddr *)&from_addr),
-                                 s,
-                                 sizeof (s)
-                       ));
+//                printf("rcv: got packet from %s \n",
+//                       inet_ntop(from_addr.sin_family,
+//                                 get_in_addr((struct sockaddr *)&from_addr),
+//                                 s,
+//                                 sizeof (s)
+//                       ));
 
                 /* if received message, write it into a packet struct  */
                 if (bytes_recved != -1) {
@@ -197,14 +198,14 @@ int main(int argc, char * argv[]){
                         /* time to send feedback */
                         if (received_counter == WINDOW_SIZE ) {
                             received_counter =  0;
-                            memset(&feedback, 0, sizeof (feedback));
+                            memset(&feedback, -1, sizeof (feedback));
 
                             int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
                             feedback.cumu_acks = window_start + ackFromWindowStart;
 
                             // generate nack[WINDOW_SIZE]
                             for(int i = 0; i < WINDOW_SIZE; ++i) {
-                                if(window_slots[i] != 1) {
+                                if(window_slots[i] != 1) { // window_slots[i] == 1 mean received
                                     feedback.nack[i] = window_start + i;
                                 }
                             }
@@ -214,6 +215,7 @@ int main(int argc, char * argv[]){
                             /* renew window slots */
                             int tmp = ackFromWindowStart;
                             while(tmp >= 0) {
+                                // window_slots[i] == 0 mean not received
                                 window_slots[tmp] = 0;
                                 tmp--;
                             }
@@ -244,12 +246,19 @@ int main(int argc, char * argv[]){
                             }
 
                             /* send feedback to the sender */
-                            sendto_dbg(socket_fd,
-                                       (const char *) &feedback,
-                                       sizeof(feedback),
-                                       0,
-                                       (struct sockaddr *) &client_addr,
-                                       sizeof(client_addr));
+                            feedback.type = 3;
+                            ret = sendto_dbg(socket_fd,
+                                             (const char *) &feedback,
+                                             sizeof(feedback),
+                                             0,
+                                             (struct sockaddr *) &client_addr,
+                                             sizeof(client_addr));
+                            if (ret < 0)
+                            {
+                                perror("sendto for feedback:");
+                            } else if (ret < sizeof(feedback)) {
+                                printf("sendto in feedback: sent data is smaller than actual data");
+                            }
                         }
 
                         break;
@@ -282,12 +291,15 @@ int main(int argc, char * argv[]){
                             feedback.type = 7;
                             feedback.cumu_acks = current_ack_seq_num;
                             /* send feedback to the sender */
-                            sendto_dbg(socket_fd,
+                            if(sendto_dbg(socket_fd,
                                        (const char *) &feedback,
                                        sizeof(feedback),
                                        0,
                                        (struct sockaddr *) &client_addr,
-                                       sizeof(client_addr));
+                                       sizeof(client_addr)) < 0)
+                            {
+                                perror("sendto for feedback:");
+                            }
                         }
 
                     /* send feedback */
@@ -296,7 +308,7 @@ int main(int argc, char * argv[]){
 
                         /* Close file to save file data */
                         fclose(fPtr);
-                        status = 1;
+                        status = 0; // make server available now
 
                         break;
                     default:
