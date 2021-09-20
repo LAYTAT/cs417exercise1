@@ -40,6 +40,7 @@ int main(int argc, char * argv[]){
     struct timeval          timeout;
     int                     window_start = 0;
     int                     window_slots[WINDOW_SIZE];
+                            memset(window_slots, 0, WINDOW_SIZE);
     struct packet           reply_to_init_pckt;
     struct File_Data        window[WINDOW_SIZE];
     int                     received_counter = 0;                   // count util there should be a feedback
@@ -144,8 +145,9 @@ int main(int argc, char * argv[]){
                             /* open file with dest file name */
                             int filename_size = packet_buf.size;
                             char destFilename[filename_size + 1];
-                            memcpy(&destFilename, &packet_buf.data, sizeof (char) * filename_size);
-                            fPtr = fopen(destFilename, "wb"); // open the file with binary mode
+                            memcpy(destFilename, &packet_buf.data, sizeof (char) * filename_size);
+                            destFilename[filename_size] = 0;
+                            fPtr = fopen(destFilename, "w"); // open the file with binary mode
                             if (fPtr == NULL) {
                                 printf("file opening failed\n");
                             }
@@ -162,12 +164,14 @@ int main(int argc, char * argv[]){
                             reply_to_init_pckt.type = 4;
                             printf("rejection for receiving sent\n");
                         }
-                        sendto_dbg(socket_fd,
+                        int bytes_send = sendto_dbg(socket_fd,
                                    (const char *)  &reply_to_init_pckt,
                                    sizeof(reply_to_init_pckt),
                                    0,
                                    (struct sockaddr *) &client_addr,
                                    sizeof(client_addr));
+                        if(bytes_send!=sizeof(reply_to_init_pckt))
+                            printf("send reply failed\n");
                         break;
 
                     /* if it is a sender packet, which contains the file data */
@@ -257,7 +261,7 @@ int main(int argc, char * argv[]){
 
                         /* check current window if all file datas valid */
                         int current_ack_seq_num = calAckFromWindowStart(window_slots, WINDOW_SIZE) + window_start;
-                        if (current_ack_seq_num !=  packet_buf.seq_num - 1){
+                        if (current_ack_seq_num !=  packet_buf.seq_num ){
                             /* generate nack[WINDOW_SIZE] and put into feedback*/
                             for(int i = 0; i < WINDOW_SIZE; ++i) {
                                 if(window_slots[i] != 1) {
@@ -292,6 +296,7 @@ int main(int argc, char * argv[]){
 
                         /* Close file to save file data */
                         fclose(fPtr);
+                        status = 1;
 
                         break;
                     default:

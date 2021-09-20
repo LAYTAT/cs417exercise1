@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
 
   lrp = atof(argv[1]);
   strcpy(source_fname, argv[2]);
-  
+
   int div = strlen(argv[3]) - 6;
   for (int i = 0; i < div; i++) {
     dest_fn[i] = argv[3][i];
@@ -55,9 +55,11 @@ int main(int argc, char* argv[]) {
     comp_name[i-div] = argv[3][i];
   }
   dest_fn[strlen(argv[3])-7] = 0;
-  comp_name[6] = 0;
+  //comp_name[6] = 0;
+  memcpy(comp_name, "localhost", 9); //TODO: commnet before push
+  comp_name[10] = 0;
 
-  //open source file and parse so it can send
+    //open source file and parse so it can send
   /* Open the source file for reading */
   if((fr = fopen(source_fname, "r")) == NULL) {
     perror("fopen");
@@ -65,7 +67,7 @@ int main(int argc, char* argv[]) {
   }
 
   fseek(fr, 0, SEEK_END);
-  total_packets = ftell(fr)/sizeof(struct File_Data);
+  total_packets = ftell(fr) / sizeof(struct File_Data) + 1;
   rewind(fr);
 
   
@@ -98,7 +100,7 @@ int main(int argc, char* argv[]) {
   Initial_Packet.seq_num = -1;
   Initial_Packet.size = strlen(dest_fn); //length of file name
   Initial_Packet.cumu_acks = -1;
-  Initial_Packet.nack[WINDOW_SIZE] = 0;
+  memset(Initial_Packet.nack, 0, WINDOW_SIZE * sizeof(int));
   struct File_Data fn;
   memcpy(fn.data, dest_fn, strlen(dest_fn));
   Initial_Packet.data = fn;
@@ -116,7 +118,9 @@ int main(int argc, char* argv[]) {
     if (num > 0) {
       if (FD_ISSET(ss, &read_mask)) {
         serv_len = sizeof(serv_addr);
-        n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, serv_len);
+        n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr, &serv_len);
+        perror("recvfrom:");
+
         if (Recieved_Packet.type == 4) { //reject
           server_flag = 0;
           break;
@@ -140,6 +144,9 @@ int main(int argc, char* argv[]) {
   for (int i = 0; i < WINDOW_SIZE; i++) {
     nread = fread(buf, 1, BUF_SIZE, fr);
     buf[nread] = 0; //add null character
+    if (nread == 0) {
+        break;
+    }
     memcpy(window_data[i], buf, strlen(buf)+1);
     memset(buf, 0, sizeof(buf)); 
     nread = 0;
@@ -153,7 +160,7 @@ int main(int argc, char* argv[]) {
       memset(&data_buf, 0, sizeof(data_buf));
       memset(&Send_Packet, 0, sizeof(Send_Packet));
 
-      if (i == total_packets) {
+      if (i == total_packets -1) {
         Send_Packet.type = 6;
       } else {
         Send_Packet.type = 2;
@@ -161,12 +168,12 @@ int main(int argc, char* argv[]) {
 
       Send_Packet.size = strlen(window_data[i]);
       Send_Packet.seq_num = i;
-      memcpy(data_buf.data, window_data[i], sizeof(window_data));
+      memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
       Send_Packet.data = data_buf;
       sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
 
       if (i == total_packets) {
-        break;
+          break;
       }
     }
   }
@@ -188,7 +195,7 @@ int main(int argc, char* argv[]) {
         if (Recieved_Packet.type == 7) { //last packet recieved by the server
           fprintf(1, "Last Packet Delivered Succesfully.\n");
           break;
-        } else if (Recieved_Packet.type = 3) { //feedback packet recieved
+        } else if (Recieved_Packet.type == 3) { //feedback packet recieved
           /*respond to nacks + slide/update window + send packets*/
 
           //respond to nacks
