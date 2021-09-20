@@ -331,7 +331,7 @@ int main(int argc, char * argv[]){
                             for (int i = 0; i < ackFromWindowStart; ++i) {
                                 //int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
                                 //fwrite(&window[idx_of_file_buf], sizeof(struct File_Data), 1, fPtr);
-                                fwrite(&window[i], sizeof(struct File_Data), 1, fPtr);
+                                fwrite(&window[i], packet_buf.size, 1, fPtr);
                             }
                             /* Close file to save file data */
 
