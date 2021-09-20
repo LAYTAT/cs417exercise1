@@ -55,6 +55,7 @@ int main(int argc, char * argv[]){
     struct timeval          last_timestamp;
     int                     last_seq;
     int                     ret = -1;
+    int                     idx_in_window;
 
     //debug usage
     //char                    s[INET6_ADDRSTRLEN];
@@ -183,7 +184,7 @@ int main(int argc, char * argv[]){
                         ready_packet_flag = 0;
 
                         /* packet at a valid position in the current window */
-                        int idx_in_window = packet_buf.seq_num - window_start;
+                        idx_in_window = packet_buf.seq_num - window_start;
                         if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
                         {
                             memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
