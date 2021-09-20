@@ -16,8 +16,9 @@
 #define PORT (10040)
 //#define PORT (10280)
 #define MAX_MESS_LEN (1400)
-#define BUFSIZE (30)
-#define WINDOW_SIZE (10)
+#define BUFSIZE 30 //(10)
+#define WINDOW_SIZE 10//(3)
+#define FEEDBACK_DEVIDER (1)
 #define MAX_LOSS_RATE_PERCENT (25)
 
 struct File_Data {
