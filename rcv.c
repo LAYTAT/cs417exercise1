@@ -55,9 +55,10 @@ int main(int argc, char * argv[]){
     struct timeval          last_timestamp;
     int                     last_seq;
     int                     ret = -1;
+    int                     idx_in_window;
 
     //debug usage
-    char                    s[INET6_ADDRSTRLEN];
+    //char                    s[INET6_ADDRSTRLEN];
 
     if (argc != 2) {
         printf("please just enter lost_rate,\n usage: rcv loss_rate_percent\n");
@@ -137,7 +138,7 @@ int main(int argc, char * argv[]){
 
                 switch (packet_buf.type) {
                     /* received packet is a init packet */
-                    case 1:
+                    case 1:{
                         if ( status == 0 ) {
                             client_addr = from_addr;
                             status = 1; //mark server as occupied
@@ -157,7 +158,7 @@ int main(int argc, char * argv[]){
                             timeout.tv_sec = 20;
                             ready_packet_flag = 1;
 
-                           /* this is where communication starts */
+                            /* this is where communication starts */
                             gettimeofday(&com_start_timestmp, NULL);
 
                         } else {
@@ -166,23 +167,24 @@ int main(int argc, char * argv[]){
                             printf("rejection for receiving sent\n");
                         }
                         int bytes_send = sendto_dbg(socket_fd,
-                                   (const char *)  &reply_to_init_pckt,
-                                   sizeof(reply_to_init_pckt),
-                                   0,
-                                   (struct sockaddr *) &client_addr,
-                                   sizeof(client_addr));
+                                                    (const char *)  &reply_to_init_pckt,
+                                                    sizeof(reply_to_init_pckt),
+                                                    0,
+                                                    (struct sockaddr *) &client_addr,
+                                                    sizeof(client_addr));
                         if(bytes_send!=sizeof(reply_to_init_pckt))
                             printf("send reply failed\n");
                         break;
+                    }
 
                     /* if it is a sender packet, which contains the file data */
-                    case 2:
+                    case 2:{
                         /*remove flag for ready pakcet*/
                         timeout.tv_sec = NORMAL_TIMEOUT;
                         ready_packet_flag = 0;
 
                         /* packet at a valid position in the current window */
-                        int idx_in_window = packet_buf.seq_num - window_start;
+                        idx_in_window = packet_buf.seq_num - window_start;
                         if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
                         {
                             memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
@@ -239,18 +241,17 @@ int main(int argc, char * argv[]){
                             for ( int i = 0 ; i < ackFromWindowStart; ++i ){
                                 int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
                                 fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
-                            }
+                            } // TODO: need better file writing
 
+
+                            /* send feedback to the sender */
                             memset(&feedback, -1, sizeof (feedback));
-
                             // generate nack[WINDOW_SIZE]
                             for(int i = 0; i < WINDOW_SIZE; ++i) {
                                 if(window_slots[i] != 1) { // window_slots[i] == 1 mean received
                                     feedback.nack[i] = window_start + i;
                                 }
                             }
-
-                            /* send feedback to the sender */
                             feedback.type = 3;
                             ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
                             feedback.cumu_acks = window_start + ackFromWindowStart - 1;
@@ -269,19 +270,16 @@ int main(int argc, char * argv[]){
                         }
 
                         break;
+                    }
 
                     /* received last sender packetk */
-                    case 6:
-                        /*clean feedback before writing infos on it*/
-                        memset(&feedback, 0, sizeof (feedback));
-
-                        /* check current window if all file datas valid */
+                    case 6: {
+                        //* check current window if all file datas valid
                         int current_ack_seq_num = calAckFromWindowStart(window_slots, WINDOW_SIZE) + window_start;
-
                         /* packet at a valid position in the current window */
                         idx_in_window = packet_buf.seq_num - window_start;
-                        if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
-                        {
+                        if (packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE &&
+                            window_slots[idx_in_window] == 0) {
                             memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
                             window_slots[idx_in_window] = 1;
 
@@ -289,32 +287,50 @@ int main(int argc, char * argv[]){
                             printf("packet already received or ahead of window\n");
                         }
 
-                        if (current_ack_seq_num !=  packet_buf.seq_num ){
+                        // not all before final packets are received
+                        if (current_ack_seq_num != packet_buf.seq_num) {
+
+                            //send feedback with nacks
+                            memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
                             /* generate nack[WINDOW_SIZE] and put into feedback*/
-                            for(int i = 0; i < WINDOW_SIZE; ++i) {
-                                if(window_slots[i] != 1) {
+                            for (int i = 0; i < WINDOW_SIZE; ++i) {
+                                if (window_slots[i] != 1) {
                                     feedback.nack[i] = window_start + i;
                                 }
                             }
-                        } else {
-                           /* if all files received
-                            * report statistics*/
+                            feedback.type = 3;
+                            feedback.cumu_acks = current_ack_seq_num;
+                            /* send feedback to the sender */
+                            if (sendto_dbg(socket_fd,
+                                           (const char *) &feedback,
+                                           sizeof(feedback),
+                                           0,
+                                           (struct sockaddr *) &client_addr,
+                                           sizeof(client_addr)) < 0) {
+                                perror("sendto for feedback:");
+                            }
+
+                        }
+                            /* if all files received
+                                * report statistics and write them all to file*/
+                        else {
+
                             printf("The size of the file transferred is %.2f Bytes\n ",
-                                   (float)current_ack_seq_num * sizeof (struct File_Data));
+                                   (float) current_ack_seq_num * sizeof(struct File_Data));
                             gettimeofday(&finished_timestmp, NULL);
                             printf("The amount of time required for the transfer is %d seconds\n ",
                                    (int) (finished_timestmp.tv_sec - com_start_timestmp.tv_sec));
                             printf("average rate from when the communication occurred (in Mbits/sec) is %.5f\n ",
-                                   (float)current_ack_seq_num * sizeof (struct File_Data) * 8
-                                           /
-                                           ((float)(finished_timestmp.tv_sec - com_start_timestmp.tv_sec) *1024*1024));
+                                   (float) current_ack_seq_num * sizeof(struct File_Data) * 8
+                                   /
+                                   ((float) (finished_timestmp.tv_sec - com_start_timestmp.tv_sec) * 1024 * 1024));
 
                             /*write final into file and close file*/
                             int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
                             int start_idx_of_file_buf = window_start % WINDOW_SIZE;
-                            for ( int i = 0 ; i < ackFromWindowStart; ++i ){
+                            for (int i = 0; i < ackFromWindowStart; ++i) {
                                 int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
-                                fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
+                                fwrite(&window[idx_of_file_buf], sizeof(struct File_Data), 1, fPtr);
                             }
                             /* Close file to save file data */
 
@@ -322,28 +338,29 @@ int main(int argc, char * argv[]){
                             status = 0; // make server available now
                             /* renew window slots */
                             int tmp = WINDOW_SIZE - 1;
-                            while(tmp >= 0) {
+                            while (tmp >= 0) {
                                 // window_slots[i] == 0 mean not received
                                 window_slots[tmp] = 0;
                                 tmp--;
                             }
 
-                            //confirmation
+                            //send confirmation feedback
+                            memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
                             feedback.type = 7;
                             feedback.cumu_acks = current_ack_seq_num;
                             /* send feedback to the sender */
-                            if(sendto_dbg(socket_fd,
-                                       (const char *) &feedback,
-                                       sizeof(feedback),
-                                       0,
-                                       (struct sockaddr *) &client_addr,
-                                       sizeof(client_addr)) < 0)
-                            {
+                            if (sendto_dbg(socket_fd,
+                                           (const char *) &feedback,
+                                           sizeof(feedback),
+                                           0,
+                                           (struct sockaddr *) &client_addr,
+                                           sizeof(client_addr)) < 0) {
                                 perror("sendto for feedback:");
                             }
                         }
 
                         break;
+                    }
                     default:
                         printf("unknown type of packet received.\n");
                 }
