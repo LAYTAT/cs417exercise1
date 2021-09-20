@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   int serv_len;
   int num;
   int ack = -1;
-  char temp_addr[BUF_SIZE];
+  char temp_adr[BUF_SIZE];
   int total_packets;
 
   //check command line args
@@ -172,7 +172,7 @@ int main(int argc, char* argv[]) {
       Send_Packet.data = data_buf;
       sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
 
-      if (i == total_packets) {
+      if (i == total_packets - 1) {
           break;
       }
     }
