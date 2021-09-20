@@ -226,6 +226,8 @@ int main(int argc, char* argv[]) {
             }
           }
 
+          if (Recieved_Packet.cumu_acks != -1) {
+
           // slide/update window + send those packets
           ack = Recieved_Packet.cumu_acks; //sequence number of the cum_acks, i.e. ack % 50, is the end location of window update
 
@@ -269,6 +271,7 @@ int main(int argc, char* argv[]) {
             if (seq_num == total_packets) {
               continue;
             }
+          }
 
           }
         } else {
