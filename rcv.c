@@ -181,9 +181,6 @@ int main(int argc, char * argv[]){
                         timeout.tv_sec = NORMAL_TIMEOUT;
                         ready_packet_flag = 0;
 
-                       /* keep track in order to send feedback */
-                        received_counter ++;
-
                         /* packet at a valid position in the current window */
                         int idx_in_window = packet_buf.seq_num - window_start;
                         if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
@@ -195,13 +192,56 @@ int main(int argc, char * argv[]){
                             printf("packet already received or ahead of window\n");
                         }
 
+                        /*         TODO: Both the sender (ncp) and the receiver (rcv) programs should report two statistics
+                         *          every 100Mbytes of data sent/received IN ORDER (all the data from the beginning of
+                         *          the file to that point was received with no gaps):
+                         *          1) The total amount of data (in Mbytes) successfully transferred by that time.
+                         *          2) The average transfer rate of the last 100Mbytes sent/received (in Mbits/sec).
+                         *          */
+
+                        if (window_start == 0) {
+                            /* get start time */
+                            gettimeofday(&last_timestamp, NULL);
+                            last_seq = 0;
+                        }
+                        if (window_start != 0 && window_start % EVERY_100M_IN_NUMS_OF_PACKET == 0) {
+                            struct timeval timestamp;
+                            gettimeofday(&timestamp, NULL);
+                            printf("The total amount of data (in Mbytes) successfully transferred is %0.2f\n The average transfer rate is %0.2f",
+                                   ((float)window_start * sizeof (struct File_Data)) / (1024 * 1024 ),
+                                   (((float)(window_start - last_seq)* sizeof (struct File_Data)) / (1024 * 1024 )) * 8  /  (timestamp.tv_sec - last_timestamp.tv_sec)
+                            );
+                            gettimeofday(&last_timestamp, NULL);
+                            last_seq = window_start;
+                        }
+
+                        /* keep track in order to know when to send feedback */
+                        received_counter ++;
                         /* time to send feedback */
                         if (received_counter == WINDOW_SIZE ) {
                             received_counter =  0;
-                            memset(&feedback, -1, sizeof (feedback));
 
+                            /* TODO: windwow sliding and writing file mechanism */
+                            /* update cumu ack when receive a valid packet*/
                             int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
-                            feedback.cumu_acks = window_start + ackFromWindowStart;
+                            /* renew window slots */
+                            int tmp = ackFromWindowStart - 1;
+                            while(tmp >= 0) {
+                                // window_slots[i] == 0 mean not received
+                                window_slots[tmp] = 0;
+                                tmp--;
+                            }
+                            /* write cumulated packets into a file */
+                            int start_idx_of_file_buf = window_start % WINDOW_SIZE;
+                            window_start = window_start + ackFromWindowStart;
+                            /* write cumulated datas data into file */
+                            //fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
+                            for ( int i = 0 ; i < ackFromWindowStart; ++i ){
+                                int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
+                                fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
+                            }
+
+                            memset(&feedback, -1, sizeof (feedback));
 
                             // generate nack[WINDOW_SIZE]
                             for(int i = 0; i < WINDOW_SIZE; ++i) {
@@ -209,44 +249,11 @@ int main(int argc, char * argv[]){
                                     feedback.nack[i] = window_start + i;
                                 }
                             }
-                            /* write cumulated packets into a file */
-                            window_start = window_start + ackFromWindowStart;
-
-                            /* renew window slots */
-                            int tmp = ackFromWindowStart;
-                            while(tmp >= 0) {
-                                // window_slots[i] == 0 mean not received
-                                window_slots[tmp] = 0;
-                                tmp--;
-                            }
-
-                            /* write cumulated datas data into file */
-                            fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
-
-                            /*         TODO: Both the sender (ncp) and the receiver (rcv) programs should report two statistics
-                             *          every 100Mbytes of data sent/received IN ORDER (all the data from the beginning of
-                             *          the file to that point was received with no gaps):
-                             *          1) The total amount of data (in Mbytes) successfully transferred by that time.
-                             *          2) The average transfer rate of the last 100Mbytes sent/received (in Mbits/sec).
-                             *          */
-                            if (window_start == 0) {
-                                /* get start time */
-                                gettimeofday(&last_timestamp, NULL);
-                                last_seq = 0;
-                            }
-                            if (window_start != 0 && window_start % EVERY_100M_IN_NUMS_OF_PACKET == 0) {
-                                struct timeval timestamp;
-                                gettimeofday(&timestamp, NULL);
-                                printf("The total amount of data (in Mbytes) successfully transferred is %0.2f\n The average transfer rate is %0.2f",
-                                       ((float)window_start * sizeof (struct File_Data)) / (1024 * 1024 ),
-                                       (((float)(window_start - last_seq)* sizeof (struct File_Data)) / (1024 * 1024 )) * 8  /  (timestamp.tv_sec - last_timestamp.tv_sec)
-                                       );
-                                gettimeofday(&last_timestamp, NULL);
-                                last_seq = window_start;
-                            }
 
                             /* send feedback to the sender */
                             feedback.type = 3;
+                            ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
+                            feedback.cumu_acks = window_start + ackFromWindowStart - 1;
                             ret = sendto_dbg(socket_fd,
                                              (const char *) &feedback,
                                              sizeof(feedback),
@@ -270,6 +277,18 @@ int main(int argc, char * argv[]){
 
                         /* check current window if all file datas valid */
                         int current_ack_seq_num = calAckFromWindowStart(window_slots, WINDOW_SIZE) + window_start;
+
+                        /* packet at a valid position in the current window */
+                        idx_in_window = packet_buf.seq_num - window_start;
+                        if ( packet_buf.seq_num >= window_start && idx_in_window < WINDOW_SIZE && window_slots[idx_in_window] == 0)
+                        {
+                            memcpy(&window[idx_in_window], &packet_buf.data, sizeof(struct File_Data));
+                            window_slots[idx_in_window] = 1;
+
+                        } else {
+                            printf("packet already received or ahead of window\n");
+                        }
+
                         if (current_ack_seq_num !=  packet_buf.seq_num ){
                             /* generate nack[WINDOW_SIZE] and put into feedback*/
                             for(int i = 0; i < WINDOW_SIZE; ++i) {
@@ -285,9 +304,31 @@ int main(int argc, char * argv[]){
                             gettimeofday(&finished_timestmp, NULL);
                             printf("The amount of time required for the transfer is %d seconds\n ",
                                    (int) (finished_timestmp.tv_sec - com_start_timestmp.tv_sec));
-                            printf("average rate at which the communication occurred (in Mbits/sec) is %.2f\n ",
-                                   (float)current_ack_seq_num * sizeof (struct File_Data) * 1024*1024*8 / (finished_timestmp.tv_sec - com_start_timestmp.tv_sec));
+                            printf("average rate from when the communication occurred (in Mbits/sec) is %.5f\n ",
+                                   (float)current_ack_seq_num * sizeof (struct File_Data) * 8
+                                           /
+                                           ((float)(finished_timestmp.tv_sec - com_start_timestmp.tv_sec) *1024*1024));
 
+                            /*write final into file and close file*/
+                            int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
+                            int start_idx_of_file_buf = window_start % WINDOW_SIZE;
+                            for ( int i = 0 ; i < ackFromWindowStart; ++i ){
+                                int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
+                                fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
+                            }
+                            /* Close file to save file data */
+
+                            fclose(fPtr);
+                            status = 0; // make server available now
+                            /* renew window slots */
+                            int tmp = WINDOW_SIZE - 1;
+                            while(tmp >= 0) {
+                                // window_slots[i] == 0 mean not received
+                                window_slots[tmp] = 0;
+                                tmp--;
+                            }
+
+                            //confirmation
                             feedback.type = 7;
                             feedback.cumu_acks = current_ack_seq_num;
                             /* send feedback to the sender */
@@ -301,14 +342,6 @@ int main(int argc, char * argv[]){
                                 perror("sendto for feedback:");
                             }
                         }
-
-                    /* send feedback */
-                        /*write final into file and close file*/
-                        fwrite(&packet_buf.data , sizeof(struct File_Data), 1 , fPtr);
-
-                        /* Close file to save file data */
-                        fclose(fPtr);
-                        status = 0; // make server available now
 
                         break;
                     default:
