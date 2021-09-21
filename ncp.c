@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
 
                             memset(&data_buf, 0, sizeof(data_buf));
                             memset(&Send_Packet, 0, sizeof(Send_Packet));
-                            seq_num = i + WINDOW_SIZE * ((int) floor((wind_num - i - 1) / WINDOW_SIZE) + 1);
+                            seq_num = i + WINDOW_SIZE * (((wind_num - i) / WINDOW_SIZE) + 1);
 
                             if (seq_num + 1 == total_packets) {
                                 Send_Packet.type = 6;
