@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
 
                         //respond to nacks
                         for (int i = 0;
-                             i < (int) (sizeof(Recieved_Packet.nack) / sizeof(Recieved_Packet.nack[0])); i++) {
+                             i < WINDOW_SIZE; i++) {
                             if (Recieved_Packet.nack[i] != -1) {
                                 memset(&data_buf, 0, sizeof(data_buf));
                                 memset(&Send_Packet, 0, sizeof(Send_Packet));
