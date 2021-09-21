@@ -37,6 +37,9 @@ int main(int argc, char *argv[]) {
     int ack = -1;
     int total_packets;
     int ret = 0;
+    struct timeval com_start_timestamp;
+    struct timeval finished_timestamp;
+    struct timeval last_timestamp;
 
     //check command line args
     if (argc != 4) {
@@ -58,8 +61,8 @@ int main(int argc, char *argv[]) {
         comp_name[i - div] = argv[3][i];
     }
     dest_fn[strlen(argv[3]) - 7] = 0;
-    comp_name[6] = 0;
-    //memcpy(comp_name, "localhost", 9); //TODO: to be deleted
+    //comp_name[6] = 0;
+    memcpy(comp_name, "localhost", 9); //TODO: to be deleted
     comp_name[9] = 0;
 
     //open source file and parse so it can send
@@ -190,7 +193,7 @@ int main(int argc, char *argv[]) {
     //send the file data
     while (server_flag == 1) { //server is ready to recieve
         read_mask = mask;
-        timeout.tv_sec = 1;
+        timeout.tv_sec = .5;
         timeout.tv_usec = 0;
 
         memset(&Recieved_Packet, 0, sizeof(Recieved_Packet));
@@ -284,9 +287,22 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-        } else { //timeout
-            printf(".");
-            fflush(0);
+        } else { //timeout, send everything in the window to the rcv
+            for (int i = 0; i < WINDOW_SIZE; i++) {
+                memset(&Send_Packet, 0, sizeof(Send_Packet));
+                memset(&data_buf, 0, sizeof(data_buf));
+                seq_num = i + WINDOW_SIZE * (((wind_num - i) / WINDOW_SIZE) + 1);
+                Send_Packet.type = 2;
+                Send_Packet.size = strlen(window_data[i]);
+                Send_Packet.seq_num = seq_num;
+                memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
+                ret = sendto_dbg(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
+                                 sizeof(serv_addr));
+
+                if (ret == -1) {
+                    perror("sendto for feedback: ");
+                }
+            }
         }
 
     }
