@@ -36,7 +36,7 @@ clean:
 	rm ucast
 	rm myip
 	rm file_copy
-	rm ncv
+	rm ncp
 	rm rcv
 
 %.o:    %.c
