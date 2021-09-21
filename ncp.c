@@ -1,6 +1,7 @@
 #include "net_include.h"
 #include "math.h"
 
+#define TIMEOUT_FEEDBACK_IN_SECONDS 2
 #define BUF 50
 
 //ncp send files in packets
@@ -189,18 +190,22 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    int feedback_timeout_flag = 0;
+    struct timeval feedback_timestamp;
 
     //send the file data
     while (server_flag == 1) { //server is ready to recieve
         read_mask = mask;
-        timeout.tv_sec = .5;
+        timeout.tv_sec = 1;
         timeout.tv_usec = 0;
+
 
         memset(&Recieved_Packet, 0, sizeof(Recieved_Packet));
 
         num = select(FD_SETSIZE, &read_mask, &write_mask, &excep_mask, &timeout);
         if (num > 0) {
             if (FD_ISSET(ss, &read_mask)) {
+                feedback_timeout_flag = 0;
                 serv_len = sizeof(serv_addr);
                 n = recvfrom(ss, &Recieved_Packet, sizeof(Recieved_Packet), 0, (struct sockaddr *) &serv_addr,
                              &serv_len);
@@ -279,7 +284,8 @@ int main(int argc, char *argv[]) {
 
 
                         }
-
+                        feedback_timeout_flag = 1;
+                        gettimeofday(&feedback_timestamp, NULL);
                     }
                 } else {
                     printf("received unexpected packet type.\n");
@@ -288,20 +294,29 @@ int main(int argc, char *argv[]) {
             }
 
         } else { //timeout, send everything in the window to the rcv
-            for (int i = 0; i < WINDOW_SIZE; i++) {
-                memset(&Send_Packet, 0, sizeof(Send_Packet));
-                memset(&data_buf, 0, sizeof(data_buf));
-                seq_num = i + WINDOW_SIZE * (((wind_num - i) / WINDOW_SIZE) + 1);
-                Send_Packet.type = 2;
-                Send_Packet.size = strlen(window_data[i]);
-                Send_Packet.seq_num = seq_num;
-                memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
-                ret = sendto_dbg(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
-                                 sizeof(serv_addr));
 
-                if (ret == -1) {
-                    perror("sendto for feedback: ");
+            if(feedback_timeout_flag){
+                struct timeval tmp;
+                gettimeofday(&tmp, NULL);
+                if (tmp.tv_sec - feedback_timestamp.tv_sec >= TIMEOUT_FEEDBACK_IN_SECONDS){
+                    /* resend feedback to the sender */
+                    for (int i = 0; i < WINDOW_SIZE; i++) {
+                        memset(&Send_Packet, 0, sizeof(Send_Packet));
+                        memset(&data_buf, 0, sizeof(data_buf));
+                        seq_num = i + WINDOW_SIZE * (((wind_num - i) / WINDOW_SIZE) + 1);
+                        Send_Packet.type = 2;
+                        Send_Packet.size = strlen(window_data[i]);
+                        Send_Packet.seq_num = seq_num;
+                        memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
+                        ret = sendto_dbg(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
+                                         sizeof(serv_addr));
+
+                        if (ret == -1) {
+                            perror("sendto for feedback: ");
+                        }
+                    }
                 }
+                gettimeofday(&feedback_timestamp,NULL);
             }
         }
 
