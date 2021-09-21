@@ -251,7 +251,7 @@ int main(int argc, char *argv[]) {
                             memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
                             Send_Packet.data = data_buf;
                             ret = sendto_dbg(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
-                                         sizeof(serv_addr));
+                                             sizeof(serv_addr));
                             if (ret == -1) {
                                 perror("sendto: ");
                             }
@@ -259,6 +259,7 @@ int main(int argc, char *argv[]) {
                             x--;
                             i++;
                         }
+                    }
 
                         //respond to nacks
                         for (int i = 0;
@@ -286,7 +287,6 @@ int main(int argc, char *argv[]) {
                         }
                         feedback_timeout_flag = 1;
                         gettimeofday(&feedback_timestamp, NULL);
-                    }
                 } else {
                     printf("received unexpected packet type.\n");
                     break;
