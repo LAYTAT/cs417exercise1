@@ -248,7 +248,7 @@ int main(int argc, char * argv[]){
                             /* send feedback to the sender */
                             memset(&feedback, -1, sizeof (feedback));
                             // generate nack[WINDOW_SIZE]
-                            for(int i = 0; i < WINDOW_SIZE; ++i) {
+                            for(int i = 0; i < idx_in_window; ++i) { //TODO
                                 if(window_slots[i] != 1) { // window_slots[i] == 1 mean received
                                     feedback.nack[i] = window_start + i;
                                 }
@@ -293,7 +293,7 @@ int main(int argc, char * argv[]){
                             //send feedback with nacks
                             memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
                             /* generate nack[WINDOW_SIZE] and put into feedback*/
-                            for (int i = 0; i < WINDOW_SIZE; ++i) {
+                            for (int i = 0; i < idx_in_window; ++i) { //TODO
                                 if (window_slots[i] != 1) {
                                     feedback.nack[i] = window_start + i;
                                 }
