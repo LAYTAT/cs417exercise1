@@ -230,13 +230,7 @@ int main(int argc, char * argv[]){
                         /* windwow sliding */
                         /* update cumu ack when receive a valid packet*/
                         int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
-                        /* renew window slots */
-                        int tmp = ackFromWindowStart - 1;
-                        while(tmp >= 0) {
-                            // window_slots[i] == 0 mean not received
-                            window_slots[tmp] = 0;
-                            tmp--;
-                        }
+
                         /* write cumulated packets into a file */
                         //int start_idx_of_file_buf = window_start % WINDOW_SIZE;
                         window_start = window_start + ackFromWindowStart;
@@ -276,13 +270,13 @@ int main(int argc, char * argv[]){
                             /* send feedback to the sender */
                             memset(&feedback, -1, sizeof (feedback));
                             // generate nack[WINDOW_SIZE]
-                            for(int i = 0; i < idx_in_window; ++i) { //TODO
+                            int index = 0;
+                            for(int i = 0; i < idx_in_window && i < WINDOW_SIZE; ++i) { //TODO
                                 if(window_slots[i] != 1) { // window_slots[i] == 1 mean received
-                                    feedback.nack[i] = window_start + i;
+                                    feedback.nack[index++] = window_start + i;
                                 }
                             }
                             feedback.type = 3;
-                            ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
                             feedback.cumu_acks = window_start + ackFromWindowStart - 1;
                             ret = sendto_dbg(socket_fd,
                                              (const char *) &feedback,
@@ -299,6 +293,14 @@ int main(int argc, char * argv[]){
                             /* start timer for feedback */
                             feedback_timeout_flag = 1;
                             gettimeofday(&feedback_timestamp, NULL);
+                        }
+
+                        /* renew window slots */
+                        int tmp = ackFromWindowStart - 1;
+                        while(tmp >= 0) {
+                            // window_slots[i] == 0 mean not received
+                            window_slots[tmp] = 0;
+                            tmp--;
                         }
 
                         break;
@@ -325,9 +327,10 @@ int main(int argc, char * argv[]){
                             //send feedback with nacks
                             memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
                             /* generate nack[WINDOW_SIZE] and put into feedback*/
+                            int index = 0;
                             for (int i = 0; i < idx_in_window; ++i) { //TODO
                                 if (window_slots[i] != 1) {
-                                    feedback.nack[i] = window_start + i;
+                                    feedback.nack[index++] = window_start + i;
                                 }
                             }
                             feedback.type = 3;
@@ -427,6 +430,7 @@ int main(int argc, char * argv[]){
                     perror("sendto for feedback:");
                 }
             }
+            gettimeofday(&feedback_timestamp,NULL);
         }
     }
     return 0;
