@@ -4,6 +4,11 @@
 #include "net_include.h"
 #include "arpa/inet.h" //for inet_ntop used for show debug info
 
+#define TIMEOUT_FEEDBACK_IN_SECONDS 3
+#define TIMEOUT_ENDPACKET_IN_SECONDS 3
+#define NUMS_OF_END_TO_SEND 20
+#define NORMAL_TIMEOUT 1
+
 int calAckFromWindowStart(const int * begin, int size) {
     int count = 0;
     for (int i = 0; i < size ; ++i) {
@@ -48,7 +53,6 @@ int main(int argc, char * argv[]){
                             feedback.type = 3;
     FILE *                  fPtr = NULL;                            //file pointer to write stuff into
     int                     ready_packet_flag = 0;
-    int                     NORMAL_TIMEOUT = 10;
     int                     EVERY_100M_IN_NUMS_OF_PACKET = (104857600/sizeof(struct File_Data));
     struct timeval          com_start_timestmp;
     struct timeval          finished_timestmp;
@@ -56,6 +60,9 @@ int main(int argc, char * argv[]){
     int                     last_seq;
     int                     ret = -1;
     int                     idx_in_window;
+    int                     feedback_timeout_flag = 0;
+    struct timeval          feedback_timestamp;
+    int                     final_seq_num = -1;
 
     //debug usage
     //char                    s[INET6_ADDRSTRLEN];
@@ -179,6 +186,9 @@ int main(int argc, char * argv[]){
 
                     /* if it is a sender packet, which contains the file data */
                     case 2:{
+                        /* stop timer for feedback */
+                        feedback_timeout_flag = 0;
+
                         /*remove flag for ready pakcet*/
                         timeout.tv_sec = NORMAL_TIMEOUT;
                         ready_packet_flag = 0;
@@ -239,6 +249,24 @@ int main(int argc, char * argv[]){
                             fwrite(&window[i] , sizeof(struct File_Data), 1 , fPtr);
                         } // TODO: need better file writing
 
+                        if (window_start == final_seq_num) {
+                            //send confirmation feedback
+                            memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
+                            feedback.type = 7;
+                            feedback.cumu_acks = final_seq_num;
+                            for (int i = 0; i < NUMS_OF_END_TO_SEND; ++i){
+                                /* send feedback to the sender */
+                                if (sendto_dbg(socket_fd,
+                                               (const char *) &feedback,
+                                               sizeof(feedback),
+                                               0,
+                                               (struct sockaddr *) &client_addr,
+                                               sizeof(client_addr)) < 0) {
+                                    perror("sendto for feedback:");
+                                }
+                            }
+                        }
+
                         /* send feedback */
                         received_counter ++;
                         /* keep track in order to know when to send feedback */
@@ -268,6 +296,9 @@ int main(int argc, char * argv[]){
                             } else if (ret < sizeof(feedback)) {
                                 printf("sendto in feedback: sent data is smaller than actual data");
                             }
+                            /* start timer for feedback */
+                            feedback_timeout_flag = 1;
+                            gettimeofday(&feedback_timestamp, NULL);
                         }
 
                         break;
@@ -275,6 +306,7 @@ int main(int argc, char * argv[]){
 
                     /* received last sender packetk */
                     case 6: {
+                        final_seq_num = packet_buf.seq_num;
                         //* check current window if all file datas valid
                         int current_ack_seq_num = calAckFromWindowStart(window_slots, WINDOW_SIZE) + window_start;
                         /* packet at a valid position in the current window */
@@ -309,7 +341,9 @@ int main(int argc, char * argv[]){
                                            sizeof(client_addr)) < 0) {
                                 perror("sendto for feedback:");
                             }
-
+                            /* start timer for feedback */
+                            feedback_timeout_flag = 1;
+                            gettimeofday(&feedback_timestamp, NULL);
                         }
                             /* if all files received
                                 * report statistics and write them all to file*/
@@ -338,35 +372,28 @@ int main(int argc, char * argv[]){
                             fclose(fPtr);
                             status = 0; // make server available now
                             window_start = 0;
-                            /* renew window slots */
-//                            int tmp = WINDOW_SIZE - 1;
-//                            while (tmp >= 0) {
-//                                // window_slots[i] == 0 mean not received
-//                                window_slots[tmp] = 0;
-//                                tmp--;
-//                            }
 
                             //send confirmation feedback
                             memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
                             feedback.type = 7;
-                            feedback.cumu_acks = current_ack_seq_num;
-                            /* send feedback to the sender */
-                            if (sendto_dbg(socket_fd,
-                                           (const char *) &feedback,
-                                           sizeof(feedback),
-                                           0,
-                                           (struct sockaddr *) &client_addr,
-                                           sizeof(client_addr)) < 0) {
-                                perror("sendto for feedback:");
+                            feedback.cumu_acks = final_seq_num;
+                            for (int i = 0; i < NUMS_OF_END_TO_SEND; ++i){
+                                /* send feedback to the sender */
+                                if (sendto_dbg(socket_fd,
+                                               (const char *) &feedback,
+                                               sizeof(feedback),
+                                               0,
+                                               (struct sockaddr *) &client_addr,
+                                               sizeof(client_addr)) < 0) {
+                                    perror("sendto for feedback:");
+                                }
                             }
                         }
-
                         break;
                     }
                     default:
                         printf("unknown type of packet received.\n");
                 }
-
             }
         } else {
             /*if timeout for readypacket */
@@ -385,7 +412,22 @@ int main(int argc, char * argv[]){
             printf("not receiving anything from anyone...\n");
             fflush(0);
         }
-    }
 
+        if(feedback_timeout_flag){
+            struct timeval tmp;
+            gettimeofday(&tmp, NULL);
+            if (tmp.tv_sec - feedback_timestamp.tv_sec >= TIMEOUT_FEEDBACK_IN_SECONDS){
+                /* resend feedback to the sender */
+                if (sendto_dbg(socket_fd,
+                               (const char *) &feedback,
+                               sizeof(feedback),
+                               0,
+                               (struct sockaddr *) &client_addr,
+                               sizeof(client_addr)) < 0) {
+                    perror("sendto for feedback:");
+                }
+            }
+        }
+    }
     return 0;
 }
