@@ -228,14 +228,14 @@ int main(int argc, char * argv[]){
                             tmp--;
                         }
                         /* write cumulated packets into a file */
-                        int start_idx_of_file_buf = window_start % WINDOW_SIZE;
+                        //int start_idx_of_file_buf = window_start % WINDOW_SIZE;
                         window_start = window_start + ackFromWindowStart;
 
                         /* write cumulated datas data into file */
                         //fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
                         for ( int i = 0 ; i < ackFromWindowStart; ++i ){
-                            int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
-//                            fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
+                            //int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
+                            //fwrite(&window[idx_of_file_buf] , sizeof(struct File_Data), 1 , fPtr);
                             fwrite(&window[i] , sizeof(struct File_Data), 1 , fPtr);
                         } // TODO: need better file writing
 
@@ -327,7 +327,7 @@ int main(int argc, char * argv[]){
 
                             /*write final into file and close file*/
                             int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
-                            int start_idx_of_file_buf = window_start % WINDOW_SIZE;
+                            //int start_idx_of_file_buf = window_start % WINDOW_SIZE;
                             for (int i = 0; i < ackFromWindowStart; ++i) {
                                 //int idx_of_file_buf = (start_idx_of_file_buf + i) % WINDOW_SIZE;
                                 //fwrite(&window[idx_of_file_buf], sizeof(struct File_Data), 1, fPtr);
