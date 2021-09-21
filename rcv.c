@@ -337,6 +337,7 @@ int main(int argc, char * argv[]){
 
                             fclose(fPtr);
                             status = 0; // make server available now
+                            window_start = 0;
                             /* renew window slots */
 //                            int tmp = WINDOW_SIZE - 1;
 //                            while (tmp >= 0) {
