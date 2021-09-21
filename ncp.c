@@ -45,6 +45,9 @@ int main(int argc, char *argv[]) {
     }
 
     lrp = atof(argv[1]);
+    /* Call this once to initialize the coat routine */
+    sendto_dbg_init(lrp);
+
     strcpy(source_fname, argv[2]);
 
     int div = strlen(argv[3]) - 6;
@@ -112,7 +115,7 @@ int main(int argc, char *argv[]) {
 
         timeout.tv_sec = NORMAL_TIMEOUT;
         timeout.tv_usec = 0;
-        sendto(ss, &Initial_Packet, sizeof(Initial_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+        sendto_dbg(ss, &Initial_Packet, sizeof(Initial_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         num = select(FD_SETSIZE, &read_mask, &write_mask, &excep_mask, &timeout);
 
         if (num > 0) {
@@ -172,7 +175,7 @@ int main(int argc, char *argv[]) {
             Send_Packet.seq_num = i;
             memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
             Send_Packet.data = data_buf;
-            ret = sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+            ret = sendto_dbg(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
             if (ret == -1) {
                 perror("sendto for initialization: ");
             }
@@ -239,7 +242,7 @@ int main(int argc, char *argv[]) {
                             Send_Packet.seq_num = seq_num;
                             memcpy(data_buf.data, window_data[i], strlen(window_data[i]));
                             Send_Packet.data = data_buf;
-                            ret = sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
+                            ret = sendto_dbg(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
                                          sizeof(serv_addr));
                             if (ret == -1) {
                                 perror("sendto: ");
@@ -263,7 +266,7 @@ int main(int argc, char *argv[]) {
                                 Send_Packet.seq_num = m;
                                 memcpy(data_buf.data, window_data[m], strlen(window_data[m]));
                                 Send_Packet.data = data_buf;
-                                ret = sendto(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
+                                ret = sendto_dbg(ss, &Send_Packet, sizeof(Send_Packet), 0, (struct sockaddr *) &serv_addr,
                                              sizeof(serv_addr));
 
                                 if (ret == -1) {
