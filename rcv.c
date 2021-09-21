@@ -21,6 +21,18 @@ int calAckFromWindowStart(const int * begin, int size) {
     return count;
 }
 
+int getBiggestIndexWhenFindingNacks (const int * begin, int size) {
+    int count = 0;
+    for (int i = size - 1; i >= 0 ; --i) {
+        if (begin[i] == 0) {
+            count++;
+        } else {
+            return size - count;
+        }
+    }
+    return size - count;
+}
+
 void* get_in_addr(struct sockaddr *sa) {
     if (sa->sa_family == AF_INET) {
         return &(((struct sockaddr_in*)sa)->sin_addr);
@@ -232,8 +244,6 @@ int main(int argc, char * argv[]){
                         int ackFromWindowStart = calAckFromWindowStart(window_slots, WINDOW_SIZE);
 
                         /* write cumulated packets into a file */
-                        //int start_idx_of_file_buf = window_start % WINDOW_SIZE;
-                        window_start = window_start + ackFromWindowStart;
 
                         /* write cumulated datas data into file */
                         //fwrite(window , sizeof(struct File_Data), ackFromWindowStart , fPtr);
@@ -271,7 +281,7 @@ int main(int argc, char * argv[]){
                             memset(&feedback, -1, sizeof (feedback));
                             // generate nack[WINDOW_SIZE]
                             int index = 0;
-                            for(int i = 0; i < idx_in_window && i < WINDOW_SIZE; ++i) { //TODO
+                            for(int i = 0; i < getBiggestIndexWhenFindingNacks(window_slots, WINDOW_SIZE); ++i) { //TODO
                                 if(window_slots[i] != 1) { // window_slots[i] == 1 mean received
                                     feedback.nack[index++] = window_start + i;
                                 }
@@ -302,6 +312,8 @@ int main(int argc, char * argv[]){
                             window_slots[tmp] = 0;
                             tmp--;
                         }
+                        //int start_idx_of_file_buf = window_start % WINDOW_SIZE;
+                        window_start = window_start + ackFromWindowStart;
 
                         break;
                     }
@@ -328,7 +340,7 @@ int main(int argc, char * argv[]){
                             memset(&feedback, -1, sizeof(feedback));/*clean feedback before writing infos on it*/
                             /* generate nack[WINDOW_SIZE] and put into feedback*/
                             int index = 0;
-                            for (int i = 0; i < idx_in_window; ++i) { //TODO
+                            for (int i = 0; i < getBiggestIndexWhenFindingNacks(window_slots, WINDOW_SIZE); ++i) { //TODO
                                 if (window_slots[i] != 1) {
                                     feedback.nack[index++] = window_start + i;
                                 }
@@ -344,6 +356,7 @@ int main(int argc, char * argv[]){
                                            sizeof(client_addr)) < 0) {
                                 perror("sendto for feedback:");
                             }
+
                             /* start timer for feedback */
                             feedback_timeout_flag = 1;
                             gettimeofday(&feedback_timestamp, NULL);
@@ -429,8 +442,8 @@ int main(int argc, char * argv[]){
                                sizeof(client_addr)) < 0) {
                     perror("sendto for feedback:");
                 }
+                gettimeofday(&feedback_timestamp,NULL);
             }
-            gettimeofday(&feedback_timestamp,NULL);
         }
     }
     return 0;
