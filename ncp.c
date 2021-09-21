@@ -58,8 +58,8 @@ int main(int argc, char *argv[]) {
         comp_name[i - div] = argv[3][i];
     }
     dest_fn[strlen(argv[3]) - 7] = 0;
-    //comp_name[6] = 0;
-    memcpy(comp_name, "localhost", 9); //TODO: to be deleted
+    comp_name[6] = 0;
+    //memcpy(comp_name, "localhost", 9); //TODO: to be deleted
     comp_name[9] = 0;
 
     //open source file and parse so it can send
